@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meal Prep</title>
+<meta name="theme-color" content="#B3401E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Law E photo background layer (hidden unless the user picks Your photo). -->
+  <div id="bgLayer" aria-hidden="true"><div id="bgPhoto"></div><div id="bgVeil"></div></div>
+  <!-- Icon set: Lucide (ISC licence, see ICONS-LICENCE.md). One consistent premium set, tinted by CSS colour. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-panel-left" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M9 3v18" /></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v3" />
+  <path d="M16 2v3" />
+  <rect x="3" y="3" width="18" height="18" rx="2" />
+  <path d="M3 9h18" /></symbol>
+    <symbol id="i-calplus" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 13v6M9 16h6"/></symbol>
+    <symbol id="i-chef-hat" viewBox="0 0 24 24"><path d="M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z" />
+  <path d="M6 17h12" /></symbol>
+    <symbol id="i-refrigerator" viewBox="0 0 24 24"><path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6Z" />
+  <path d="M5 10h14" />
+  <path d="M15 7v6" /></symbol>
+    <symbol id="i-clipboard-list" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+  <path d="M12 11h4" />
+  <path d="M12 16h4" />
+  <path d="M8 11h.01" />
+  <path d="M8 16h.01" /></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+  <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+  <circle cx="9" cy="7" r="4" /></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+  <circle cx="12" cy="12" r="3" /></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0" />
+  <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z" />
+  <circle cx="12" cy="13" r="3" /></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1" />
+  <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+  <path d="M10 12h4" /></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18" />
+  <path d="m6 6 12 12" /></symbol>
+    <symbol id="i-egg" viewBox="0 0 24 24"><path d="M12 2C8 2 4 8 4 14a8 8 0 0 0 16 0c0-6-4-12-8-12" /></symbol>
+    <symbol id="i-salad" viewBox="0 0 24 24"><path d="M19.496 12a2.5 2.5 0 00.399-2.214A2 2 0 0020.32 6.5 2 2 0 0019 3a2 2 0 00-1.5.68 2 2 0 00-3.287.424 2.5 2.5 0 00-3.189 2.06A3 3 0 0012 12l4-4" />
+  <path d="M4 12a1 1 0 00-.99 1.133A9 9 0 0012 21a9 9 0 008.99-7.867A1 1 0 0020 12z" />
+  <path d="M7 21h10" />
+  <path d="M9.85 6.907A3.5 3.5 0 005.05 12" /></symbol>
+    <symbol id="i-utensils" viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+  <path d="M7 2v20" />
+  <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" /></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" />
+  <path d="M12 6v6l4 2" /></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3" />
+  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  <path d="m7 10 5 5 5-5" /></symbol>
+    <symbol id="i-trash-2" viewBox="0 0 24 24"><path d="M10 11v6" />
+  <path d="M14 11v6" />
+  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+  <path d="M3 6h18" />
+  <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" />
+  <path d="M12 5v14" /></symbol>
+    <symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+  <path d="M12 9v4" />
+  <path d="M12 17h.01" /></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34" />
+  <circle cx="11" cy="11" r="8" /></symbol>
+  </svg>
+<header id="topStrip">
+  <button id="sidebarToggle" class="stripToggle" data-i18n-label="nav.toggleLabel" aria-label="Hide or show the side menu" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-panel-left"/></svg></button>
+  <img class="stripLogo" src="logo.svg" alt="">
+  <span class="stripName">Meal Prep</span>
+</header>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand"><img class="brandLogo" src="logo.svg" alt=""><div><div class="brandName">Meal Prep</div><div class="brandSub" data-i18n="app.tagline">Plan. Cook. Enjoy.</div></div></div>
+    <nav id="mainNav" data-i18n-label="nav.menuLabel" aria-label="Main">
+      <div class="navGroup" data-group="plan">
+        <div class="navGroupHead">
+          <button class="navGroupBtn" data-group-btn="plan" aria-expanded="true"><span data-i18n="nav.group.plan">Plan</span><svg class="icon iconSm navChev" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+          <button class="navTuck" data-tuck="plan" data-i18n-title="nav.tuckAway" title="Tuck away" data-i18n-label="nav.tuckPlan" aria-label="Tuck away the Plan group"><svg class="icon iconSm" aria-hidden="true"><use href="#i-archive"/></svg></button>
+        </div>
+        <div class="navGroupItems">
+          <button class="navBtn active" data-nav="calendar"><span class="navIcon icPink"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg></span><span data-i18n="nav.calendar">Calendar</span></button>
+          <button class="navBtn" data-nav="recipes"><span class="navIcon icPeach"><svg class="icon" aria-hidden="true"><use href="#i-chef-hat"/></svg></span><span data-i18n="nav.recipes">Recipes</span></button>
+        </div>
+      </div>
+      <div class="navGroup" data-group="kitchen">
+        <div class="navGroupHead">
+          <button class="navGroupBtn" data-group-btn="kitchen" aria-expanded="false"><span data-i18n="nav.group.kitchen">Kitchen</span><svg class="icon iconSm navChev" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+          <button class="navTuck" data-tuck="kitchen" data-i18n-title="nav.tuckAway" title="Tuck away" data-i18n-label="nav.tuckKitchen" aria-label="Tuck away the Kitchen group"><svg class="icon iconSm" aria-hidden="true"><use href="#i-archive"/></svg></button>
+        </div>
+        <div class="navGroupItems">
+          <button class="navBtn" data-nav="groceries"><span class="navIcon icGreen"><svg class="icon" aria-hidden="true"><use href="#i-refrigerator"/></svg></span><span data-i18n="nav.groceries">Groceries</span></button>
+          <button class="navBtn" data-nav="list"><span class="navIcon icSky"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"/></svg></span><span data-i18n="nav.list">Grocery List</span></button>
+          <button class="navBtn" data-nav="photocal"><span class="navIcon icSky"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg></span><span data-i18n="nav.photocal">Photo calories</span></button>
+        </div>
+      </div>
+      <div class="navGroup" data-group="people">
+        <div class="navGroupHead">
+          <button class="navGroupBtn" data-group-btn="people" aria-expanded="false"><span data-i18n="nav.group.people">People</span><svg class="icon iconSm navChev" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+          <button class="navTuck" data-tuck="people" data-i18n-title="nav.tuckAway" title="Tuck away" data-i18n-label="nav.tuckPeople" aria-label="Tuck away the People group"><svg class="icon iconSm" aria-hidden="true"><use href="#i-archive"/></svg></button>
+        </div>
+        <div class="navGroupItems">
+          <button class="navBtn" data-nav="family"><span class="navIcon icViolet"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg></span><span data-i18n="nav.family">Family</span></button>
+          <button class="navBtn" data-nav="reminders"><span class="navIcon icAmber"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg></span><span data-i18n="nav.reminders">Reminders</span></button>
+        </div>
+      </div>
+      <div class="navFoot">
+        <button class="navBtn" data-nav="prefs"><span class="navIcon icRose"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg></span><span data-i18n="nav.prefs">Preferences</span></button>
+      </div>
+      <div class="navSaved" id="navSaved">
+        <button class="navSavedHead" id="savedHead" aria-expanded="false"><span class="navIcon icRose"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg></span><span class="savedHeadText" data-i18n="nav.savedForLater">Saved for later</span><svg class="icon iconSm navChev" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+        <div class="navSavedBody" id="savedBody"></div>
+      </div>
+    </nav>
+    <div class="sideCard" id="expiringCard">
+      <div class="sideCardTitle" data-i18n="nav.useFirst">Use first</div>
+      <div id="expiringList" class="sideCardBody" data-i18n="nav.nothingExpiring">Nothing expiring soon.</div>
+    </div>
+    <div class="sideCard">
+      <div class="sideCardTitle" data-i18n="nav.today">Today</div>
+      <div id="todayCard" class="sideCardBody" data-i18n="app.loadingMeals">Loading your meals.</div>
+    </div>
+  </aside>
+  <main id="main">
+    <section id="view-calendar" class="view active">
+      <header class="topBar">
+        <div>
+          <h1 id="calTitle">Calendar</h1>
+          <p class="sub" id="calSub" data-i18n="cal.sub">Tap a day to see the meals. Tap a meal to open the full recipe.</p>
+        </div>
+        <div class="calControls">
+          <div class="segmented" id="viewSwitch">
+            <button data-viewmode="month" class="seg active" data-i18n="cal.month">Month</button>
+            <button data-viewmode="week" class="seg" data-i18n="cal.week">Week</button>
+            <button data-viewmode="day" class="seg" data-i18n="cal.day">Day</button>
+            <button data-viewmode="year" class="seg" data-i18n="cal.year">Year</button>
+          </div>
+          <div class="navArrows">
+            <button id="prevBtn" class="roundBtn" data-i18n-label="cal.prev" aria-label="Previous"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <button id="todayBtn" class="pillBtn" data-i18n="nav.today">Today</button>
+            <button id="nextBtn" class="roundBtn" data-i18n-label="cal.next" aria-label="Next"><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          </div>
+          <button id="importBtn" class="pillBtn" data-i18n-label="cal.import" aria-label="Bring my calendar in" data-i18n-title="cal.import" title="Bring my calendar in"><svg class="icon" aria-hidden="true"><use href="#i-calplus"/></svg> <span data-i18n="cal.import">Bring my calendar in</span></button>
+        </div>
+      </header>
+      <div class="legend" id="mealLegend"></div>
+      <div id="calEmpty"></div>
+      <div id="calendarRoot"></div>
+    </section>
+
+    <section id="view-recipes" class="view">
+      <header class="topBar"><div><h1 data-i18n="nav.recipes">Recipes</h1><p class="sub" data-i18n="recipes.sub">Add recipes your way, or search the ones you have.</p></div></header>
+      <div class="card">
+        <h2 data-i18n="recipes.addTitle">Add your recipe</h2>
+        <p class="hint" data-i18n="recipes.addHint">Two ways to add. Write your own recipe in full, or just type the name and approve the recipe we get for you.</p>
+        <div class="segmented" id="addModeSwitch">
+          <button class="seg active" data-addmode="own" data-i18n="recipes.modeOwn">My own recipe</button>
+          <button class="seg" data-addmode="name" data-i18n="recipes.modeName">Just the name</button>
+        </div>
+        <div id="ownWrap">
+          <div class="grid2">
+            <label><span data-i18n="recipes.nameLabel">Recipe name</span><input id="ownName" type="text" data-i18n-ph="recipes.namePh" placeholder="Grandma soup"></label>
+            <label><span data-i18n="recipes.mealLabel">Meal</span><select id="ownMeal"><option value="breakfast" data-i18n="meal.breakfast">Breakfast</option><option value="lunch" data-i18n="meal.lunch">Lunch</option><option value="dinner" selected data-i18n="meal.dinner">Dinner</option></select></label>
+            <label><span data-i18n="recipes.cookTime">Cook time in minutes</span><input id="ownMinutes" type="number" min="1" value="30"></label>
+            <label><span data-i18n="recipes.cuisineLabel">Cuisine</span><input id="ownCuisine" type="text" data-i18n-ph="recipes.cuisinePh" placeholder="Mexican"></label>
+          </div>
+          <label><span data-i18n="recipes.ingredientsLabel">Ingredients, one per line. Start each line with the amount, like 200 g chicken breast</span><textarea id="ownIngredients" rows="5" data-i18n-ph="recipes.ingredientsPh" placeholder="200 g chicken breast"></textarea></label>
+          <label><span data-i18n="recipes.stepsLabel">Steps, one per line</span><textarea id="ownSteps" rows="5" data-i18n-ph="recipes.stepsPh" placeholder="Cook the chicken until golden"></textarea></label>
+          <button id="ownSave" class="primaryBtn" data-i18n="recipes.saveMine">Save my recipe</button>
+          <div id="ownMsg" class="hint"></div>
+        </div>
+        <div id="nameWrap" class="hidden">
+          <p class="hint" data-i18n="recipes.nameHint">Type the meal you want, like tacos or butter chicken. We get the recipe, the time and the ingredients. You read it, and only save it if you approve it.</p>
+          <div class="row"><input id="nameMealInput" type="text" data-i18n-ph="recipes.nameInputPh" placeholder="Type a meal name"><button id="nameMealBtn" class="primaryBtn" data-i18n="recipes.getRecipe">Get the recipe</button></div>
+          <div id="nameMealResult"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="recipes.yoursTitle">Your recipes</h2>
+        <div id="ownRecipeList"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="recipes.allTitle">All recipes</h2>
+        <div class="row"><span class="searchWrap"><svg class="icon searchIcon" aria-hidden="true"><use href="#i-search"/></svg><input id="recipeSearch" type="text" data-i18n-ph="recipes.searchPh" placeholder="Search recipes"></span></div>
+        <div id="recipeList" class="recipeGrid"></div>
+      </div>
+    </section>
+
+    <section id="view-groceries" class="view">
+      <header class="topBar"><div><h1 data-i18n="nav.groceries">Groceries</h1><p class="sub" data-i18n="groc.sub">Everything you have, in one place. Food that goes bad sooner is used in recipes first.</p></div></header>
+      <div class="card">
+        <h2 data-i18n="groc.addTitle">Add groceries</h2>
+        <div class="grid2">
+          <label><span data-i18n="groc.foodName">Food name</span><input id="gName" type="text" data-i18n-ph="groc.foodNamePh" placeholder="Chicken breast"></label>
+          <label><span data-i18n="groc.amount">Amount</span><input id="gQty" type="number" min="0" step="any" value="500"></label>
+          <label><span data-i18n="groc.unit">Unit</span><select id="gUnit"><option>g</option><option>kg</option><option>ml</option><option>pcs</option><option>slices</option><option>tbsp</option></select></label>
+          <label><span data-i18n="groc.storedIn">Stored in</span><select id="gStorage"><option value="fridge" data-i18n="storage.fridge">Fridge</option><option value="freezer" data-i18n="storage.freezer">Freezer</option><option value="pantry" data-i18n="storage.pantry">Pantry</option></select></label>
+          <label><span data-i18n="groc.dateAdded">Date added</span><input id="gAdded" type="date"></label>
+        </div>
+        <p class="hint" id="gShelfHint" data-i18n="groc.shelfHintDefault">Pick a food and we show how long it lasts. Times come from USDA food storage research and are a guide only.</p>
+        <button id="gAdd" class="primaryBtn"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> <span data-i18n="groc.addBtn">Add to groceries</span></button>
+      </div>
+      <div class="card">
+        <h2 data-i18n="groc.photoTitle">Photo of your fridge or groceries</h2>
+        <p class="hint" data-i18n="groc.photoHint">Add a photo and the app helps name what is in it. The photo never leaves your device. A photo cannot weigh food, so you confirm each amount before it saves.</p>
+        <input id="fridgePhoto" type="file" accept="image/*">
+        <div id="photoPreview"></div>
+        <button id="photoScan" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg> <span data-i18n="groc.lookPhoto">Look at my photo</span></button>
+        <p class="hint hidden" id="gateLinePhoto"></p>
+        <div id="photoResults"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="groc.haveTitle">What you have</h2>
+        <p class="hint" data-i18n="groc.haveHint">Sorted so the food to use first is at the top.</p>
+        <div id="pantryList"></div>
+      </div>
+    </section>
+
+    <section id="view-list" class="view">
+      <header class="topBar"><div><h1 data-i18n="nav.list">Grocery List</h1><p class="sub" data-i18n="list.sub">Built from your next 7 days of meals. Add or remove anything.</p></div></header>
+      <div class="card">
+        <div class="row"><input id="extraName" type="text" data-i18n-ph="list.addPh" placeholder="Add anything, like dish soap"><button id="extraAdd" class="primaryBtn"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> <span data-i18n="common.add">Add</span></button></div>
+        <div id="shopList"></div>
+      </div>
+    </section>
+
+    <section id="view-family" class="view">
+      <header class="topBar"><div><h1 data-i18n="nav.family">Family</h1><p class="sub" data-i18n="fam.sub">Each person gets their own colour, tags, dislikes and allergies. Their meal adapts for them. Everyone else gets the normal meal.</p></div></header>
+      <div class="card">
+        <h2 data-i18n="fam.addTitle">Add a person</h2>
+        <div class="grid2">
+          <label><span data-i18n="fam.name">Name</span><input id="fName" type="text" placeholder="Jamie"></label>
+          <div><span class="fieldLabel" data-i18n="fam.colour">Colour</span><div id="fColorChips" class="colorChips" role="radiogroup" data-i18n-label="fam.colour" aria-label="Colour"></div></div>
+          <label><span data-i18n="fam.tags">Tags, split with commas</span><input id="fTags" type="text" data-i18n-ph="fam.tagsPh" placeholder="Dad, loves spicy"></label>
+          <label><span data-i18n="fam.dislikes">Does not like, split with commas</span><input id="fDislikes" type="text" data-i18n-ph="fam.dislikesPh" placeholder="capsicum, mushroom"></label>
+          <label><span data-i18n="fam.allergies">Allergies, split with commas</span><input id="fAllergies" type="text" data-i18n-ph="fam.allergiesPh" placeholder="peanut"></label>
+        </div>
+        <button id="fAdd" class="primaryBtn"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> <span data-i18n="fam.addBtn">Add person</span></button>
+        <p class="hint hidden" id="gateLineFamily"></p>
+      </div>
+      <div id="familyList" class="recipeGrid"></div>
+    </section>
+
+    <section id="view-prefs" class="view">
+      <header class="topBar"><div><h1 data-i18n="nav.prefs">Preferences</h1><p class="sub" data-i18n="prefs.sub">Your food likes shape every plan the app makes.</p></div></header>
+      <div class="card">
+        <h2 data-i18n="prefs.foodLike">Food you like</h2>
+        <p class="hint" data-i18n="prefs.foodLikeHint">Tap the food styles you want more of.</p>
+        <div id="cuisineChips" class="chipRow"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="prefs.eatTimes">Eating times</h2>
+        <div class="grid2">
+          <label><span data-i18n="prefs.breakfastAt">Breakfast at</span><input id="eatBreakfast" type="time" value="07:30"></label>
+          <label><span data-i18n="prefs.lunchAt">Lunch at</span><input id="eatLunch" type="time" value="12:30"></label>
+          <label><span data-i18n="prefs.dinnerAt">Dinner at</span><input id="eatDinner" type="time" value="18:30"></label>
+          <label><span data-i18n="prefs.setupTime">Setup time before cooking, in minutes</span><input id="setupMinutes" type="number" min="0" max="60" value="5"></label>
+          <label><span data-i18n="prefs.alsoBreakfast">Also remind me before breakfast, in minutes</span><input id="alsoBreakfast" type="number" min="0" max="240" value="0"></label>
+          <label><span data-i18n="prefs.alsoLunch">Also remind me before lunch, in minutes</span><input id="alsoLunch" type="number" min="0" max="240" value="0"></label>
+          <label><span data-i18n="prefs.alsoDinner">Also remind me before dinner, in minutes</span><input id="alsoDinner" type="number" min="0" max="240" value="0"></label>
+          <label><span data-i18n="prefs.modeBreakfast">Breakfast reminder</span><span class="modeRow"><select id="modeBreakfast"><option value="cook" data-i18n="prefs.byCookTime">By cook time</option><option value="fixed" data-i18n="prefs.sameTimeDaily">Same time daily</option></select><input id="fixedBreakfast" type="time"></span></label>
+          <label><span data-i18n="prefs.modeLunch">Lunch reminder</span><span class="modeRow"><select id="modeLunch"><option value="cook" data-i18n="prefs.byCookTime">By cook time</option><option value="fixed" data-i18n="prefs.sameTimeDaily">Same time daily</option></select><input id="fixedLunch" type="time"></span></label>
+          <label><span data-i18n="prefs.modeDinner">Dinner reminder</span><span class="modeRow"><select id="modeDinner"><option value="cook" data-i18n="prefs.byCookTime">By cook time</option><option value="fixed" data-i18n="prefs.sameTimeDaily">Same time daily</option></select><input id="fixedDinner" type="time"></span></label>
+        </div>
+        <p class="hint" data-i18n="prefs.reminderHint">Your start cooking reminder is your eating time, minus the cook time, minus your setup time.</p>
+        <p class="hint" data-i18n="prefs.modeHint">By cook time works each reminder out from the dish you are cooking. Same time daily rings at one saved time instead.</p>
+        <p class="hint" data-i18n="prefs.alsoHint">The also remind me times are a second reminder, only if you want one. Each one lands that many minutes before you eat, and 0 means off.</p>
+        <button id="prefsSave" class="primaryBtn" data-i18n="prefs.save">Save preferences</button>
+        <span id="prefsMsg" class="hint"></span>
+      </div>
+      <div class="card">
+        <h2 data-i18n="prefs.planTitle">Plan</h2>
+        <div class="row"><button id="fillMonth" class="pillBtn" data-i18n="prefs.fillMonth">Fill this month with meals</button><button id="clearPlan" class="pillBtn danger" data-i18n="prefs.clearPlan">Clear my plan</button></div>
+        <p class="hint" data-i18n="prefs.planHint">Filling uses your food likes, your groceries that expire first, and what each family member cannot eat.</p>
+      </div>
+      <!-- Plans card (app v32, upgrade moment popup): the honest home of
+           the offer. Plus is not on sale yet, and this card says so in
+           plain words; the popup's Try button lands here. Prices are
+           the locked prices of record (PRICING.md). -->
+      <div class="card" id="plansCard">
+        <h2 data-i18n="plans.title">Plans</h2>
+        <p class="hint" data-i18n="plans.freeLine">You are on the Free plan. The calendar, the recipes, cooking reminders, your data export and every allergy adaptation stay free in every plan, forever.</p>
+        <p class="hint" data-i18n="plans.plusLine">Meal Prep Plus is A$6.99 a month or A$49.99 a year, and your first month is free. Plus adds profiles for your whole table, the grocery list built from your plan, best until dates on your groceries, fridge photo help, and unlimited plans and your own recipes.</p>
+        <p class="hint" data-i18n="plans.notYetLine">Plus is not on sale yet. It opens at launch, and this card is where you will start it.</p>
+        <p class="hint" data-i18n="plans.familyLine">Meal Prep Family is A$9.99 a month or A$79.99 a year. It comes later, when its extras are built.</p>
+      </div>
+      <div class="card">
+        <h2 data-i18n="appear.title">Appearance</h2>
+        <p class="hint" data-i18n="appear.hint">Pick the background the app wears. Brand is the Meal Prep look, and it stays the standard look.</p>
+        <div class="bgRow" role="radiogroup" data-i18n-label="appear.groupLabel" aria-label="Background">
+          <button class="bgChip" data-bg-kind="brand" role="radio" aria-checked="true"><span class="bgSwatch swBrand"></span><span data-i18n="appear.brand">Brand</span></button>
+          <button class="bgChip" data-bg-kind="white" role="radio" aria-checked="false"><span class="bgSwatch swWhite"></span><span data-i18n="appear.white">White</span></button>
+          <button class="bgChip" data-bg-kind="black" role="radio" aria-checked="false"><span class="bgSwatch swBlack"></span><span data-i18n="appear.black">Black</span></button>
+          <button class="bgChip" data-bg-kind="photo" role="radio" aria-checked="false"><span class="bgSwatch swPhoto"></span><span data-i18n="appear.yourPhoto">Your photo</span></button>
+        </div>
+        <div id="bgPhotoControls" class="hidden">
+          <p class="hint" data-i18n="appear.photoHint">Your photo sits behind the app, under a soft veil so words stay easy to read. It is saved on this device only, as part of your data. Only you can replace or remove it. The app never deletes it.</p>
+          <div class="row"><button id="bgChoose" class="pillBtn" data-i18n="appear.choosePhoto">Choose a photo</button><button id="bgReplace" class="pillBtn hidden" data-i18n="appear.replacePhoto">Replace photo</button><button id="bgRemove" class="pillBtn danger hidden" data-i18n="appear.removePhoto">Remove photo</button></div>
+          <input id="bgPhotoInput" type="file" accept="image/*" class="hidden">
+          <p class="hint" id="bgPhotoMsg"></p>
+        </div>
+        <!-- Language row (app v34): quiet, inside Appearance. Auto
+             follows the device language; the pick is saved in
+             settings (user data, Law B). English and Español are
+             named in their own language, so they carry no key. -->
+        <div class="langBlock">
+          <span class="fieldLabel" data-i18n="prefs.language">Language</span>
+          <div class="bgRow" role="radiogroup" data-i18n-label="prefs.language" aria-label="Language" id="langRow">
+            <button class="bgChip langChip" data-lang-choice="auto" role="radio" aria-checked="true"><span data-i18n="prefs.langAuto">Auto</span></button>
+            <button class="bgChip langChip" data-lang-choice="en" role="radio" aria-checked="false"><span>English</span></button>
+            <button class="bgChip langChip" data-lang-choice="es" role="radio" aria-checked="false"><span>Español</span></button>
+          </div>
+          <p class="hint" data-i18n="prefs.languageHint">Auto follows the language of your device.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="setup.title">Setup guide</h2>
+        <p class="hint" data-i18n="setup.hint">Walk through the setup with Mina, from where you left off. Nothing in the app waits on it.</p>
+        <div class="row"><button id="guideReopen" class="pillBtn" data-i18n="setup.open">Open the setup guide</button></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="cal.import">Bring my calendar in</h2>
+        <p class="hint" data-i18n="importcard.hint">Copy your events from Google, Apple, Outlook or a calendar file into this calendar. Read only: nothing in your old calendar changes, and importing again never doubles anything.</p>
+        <div class="row"><button id="importOpen2" class="pillBtn" data-i18n="cal.import">Bring my calendar in</button></div>
+      </div>
+      <!-- Account card (app v23, accounts wave). It stays hidden while the
+           accounts layer is dormant (no Firebase project filled into
+           accounts-config.js): account-sync.js unhides it only when
+           sign in is live. Sign in is offered here and at the end of
+           the setup guide, and nowhere else (design section 2). -->
+      <div class="card hidden" id="accountCard">
+        <h2 data-i18n="account.title">Account</h2>
+        <div id="accountBody"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="data.title">Your data</h2>
+        <div class="row"><button id="exportBtn" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg> <span data-i18n="data.download">Download my data</span></button></div>
+        <p class="hint" data-i18n="data.localLine">Everything is saved on this device only.</p>
+        <p class="hint" data-i18n="legal.calorieMethod">Calorie estimates are worked out from USDA FoodData Central values and the recipe amounts. Information only, not medical advice.</p>
+        <div class="row"><a href="https://meal-prep-app-tau-sage.vercel.app/privacy.html" target="_blank" rel="noopener" data-i18n="data.privacy">Privacy policy</a></div>
+      </div>
+    </section>
+
+    <section id="view-reminders" class="view">
+      <header class="topBar"><div><h1 data-i18n="nav.reminders">Reminders</h1><p class="sub" data-i18n="rem.sub">Start cooking times for your next 7 days, worked out from each recipe and your eating times.</p></div></header>
+      <div class="card">
+        <h2 data-i18n="rem.notifTitle">Notifications</h2>
+        <p class="hint" id="notifStatus" data-i18n="rem.statusOff">Notifications are off.</p>
+        <div class="row"><button id="notifOn" class="primaryBtn"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg> <span data-i18n="rem.turnOn">Turn on notifications</span></button><button id="notifTest" class="pillBtn" data-i18n="rem.sendTest">Send a test</button></div>
+      </div>
+      <div class="card"><h2 data-i18n="rem.comingUp">Coming up</h2><div id="reminderList"></div></div>
+    </section>
+
+    <section id="view-photocal" class="view">
+      <header class="topBar"><div><h1 data-i18n="nav.photocal">Photo calories</h1><p class="sub" data-i18n="photocal.sub">Take a photo of food and get a rough calorie count for what the app can see.</p></div></header>
+      <div class="card">
+        <h2 data-i18n="photocal.cardTitle">Photo of food</h2>
+        <p class="hint" data-i18n="photocal.cardHint">Add a photo of food and the app names what it can see. The photo never leaves your device.</p>
+        <input id="calPhoto" type="file" accept="image/*">
+        <div id="calPhotoPreview"></div>
+        <button id="calPhotoScan" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg> <span data-i18n="groc.lookPhoto">Look at my photo</span></button>
+        <p class="hint" data-i18n="legal.photoCalorieNote">A photo cannot weigh food. These numbers are a rough guess based on a typical serving.</p>
+        <div id="calResults"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="photocal.tapTitle">Tap to add</h2>
+        <p class="hint" data-i18n="photocal.tapHint">If the photo missed a food, tap it here. Each food counts as one typical serving, with the same rough guess as above.</p>
+        <div id="calChips" class="chipRow"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- THE DOOR PAGE (app v33, the v4 shape): a signed out user lands on
+     a full first page holding only the sign up, big and centred. Step
+     one is the email; the password lives on step two. account-sync.js
+     renders both steps into #doorBody and owns the walk. -->
+<div id="doorPage" class="doorPage hidden">
+  <div class="doorInner" id="doorBody"></div>
+</div>
+
+<div id="recipeModal" class="modal hidden"><div class="modalCard" id="recipeModalCard"></div></div>
+
+<div id="guideModal" class="modal hidden">
+  <div class="modalCard small guideCard" id="guideCard"></div>
+</div>
+
+<div id="confirmModal" class="modal hidden">
+  <div class="modalCard small">
+    <h2 id="confirmTitle"></h2>
+    <p class="hint" id="confirmText"></p>
+    <div class="row"><button id="confirmYes" class="primaryBtn"></button><button id="confirmNo" class="pillBtn" data-i18n="confirm.keepIt">Keep it</button></div>
+  </div>
+</div>
+
+
+<!-- BRING MY CALENDAR IN (shared module: calendar-import.js and IMPORT-DESIGN.md) -->
+<div id="importSheet" class="modal hidden">
+  <div class="modalCard">
+    <h2 data-i18n="cal.import">Bring my calendar in</h2>
+    <p class="hint" data-i18n="import.readonlyHint">Read only. This copies your events into Meal Prep. Nothing in your old calendar changes, and importing again never doubles anything.</p>
+    <div class="chipRow" role="group" data-i18n-label="import.groupLabel" aria-label="Where is your calendar?">
+      <button class="chip import-src on" data-src="google">Google Calendar</button>
+      <button class="chip import-src" data-src="apple">Apple / iCloud</button>
+      <button class="chip import-src" data-src="outlook">Outlook</button>
+      <button class="chip import-src" data-src="file" data-i18n="import.srcFile">A calendar file</button>
+    </div>
+    <p class="hint" id="importGuide" data-i18n="import.guide.google">In Google Calendar: Settings → your calendar → “Secret address in iCal format”. Copy it, paste it below.</p>
+    <label><span data-i18n="import.linkLabel">Paste the calendar link</span><input type="url" id="importUrl" placeholder="https://... .ics" autocomplete="off"></label>
+    <div class="row">
+      <button id="importGo" class="primaryBtn" data-i18n="import.bringItIn">Bring it in</button>
+      <button id="importFileBtn" class="pillBtn" data-i18n="import.chooseFile">Choose a file instead</button>
+      <input type="file" id="importFile" accept=".ics,text/calendar" hidden>
+    </div>
+    <p class="hint" id="importResult" role="status"></p>
+    <div class="row"><button id="importClose" class="pillBtn" data-i18n="import.done">Done</button></div>
+  </div>
+</div>
+<!-- UPGRADE MOMENT POPUP (app v32). One component, shown only at the
+     moment of wanting: a person on the free tier reaching for a Plus
+     thing. Never on open, never on a timer, never on navigation. The
+     copy of record is UPGRADE-COPY.md; the words here and in app.js
+     are that copy, verbatim. -->
+<div id="upgradeModal" class="modal hidden">
+  <div class="modalCard small upgradeCard">
+    <div class="guideTop"><img class="minaPose" src="mina-celebrate.svg" alt="Mina the Timer, celebrating">
+    <div class="guideBubble" data-i18n="upgrade.bubble">This one is a Plus treat.</div>
+    <button class="roundBtn upgradeX" id="upgradeX" data-i18n-label="common.close" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <h2 id="upgradeTitle"></h2>
+    <p class="guideLine" id="upgradeBody"></p>
+    <p class="hint" id="upgradeOffer" data-i18n="upgrade.offer">Try Plus free for your first month. After that, Plus is A$6.99 a month or A$49.99 a year. Cancel any time.</p>
+    <div class="row upgradeBtns"><button data-i18n="upgrade.try" class="primaryBtn" id="upgradeTry">Try Plus free</button><button data-i18n="upgrade.notNow" class="pillBtn" id="upgradeNotNow">Not now</button></div>
+  </div>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="data.js"></script>
+<script src="logic.js"></script>
+<script src="nutrition.js"></script>
+<script src="prices-table.js"></script>
+<script src="lang.js"></script>
+<script src="vendor/ical/ical.min.js"></script>
+<script src="calendar-import.js"></script>
+<script src="accounts-config.js"></script>
+<script src="payments-config.js"></script>
+<script src="accounts.js"></script>
+<script src="demo-seed.js"></script>
+<script src="auth.js"></script>
+<script src="payments.js"></script>
+<script src="app.js"></script>
+<script src="account-sync.js"></script>
+</body>
+</html>

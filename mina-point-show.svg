@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 316" role="img" aria-label="Mina the Timer, point and show pose, hand pointing to the right">
+  <g transform="rotate(5 161 290)">
+  <!-- Mina, final master art, design of record (locked 14 Oct 2026).
+       Variant A, the toque: the winner of the chef variants sheet, picked at the brand desk,
+       Lab character read passed. Welcome pose: tick hand at 12, smile, toque at her tilt.
+       Dial in the brand primary, face and toque in the brand ground colour.
+       For the guide phase build. Mina is not in the current app build.
+       Guide pose POINT/SHOW: transforms of the master only (see POSES.md). -->
+  <title>Mina the Timer, point and show pose</title>
+  <rect x="112" y="268" width="40" height="22" rx="10" fill="#B3401E"/>
+  <rect x="170" y="268" width="40" height="22" rx="10" fill="#B3401E"/>
+  <circle cx="161" cy="168" r="104" fill="#B3401E"/>
+  <circle cx="161" cy="168" r="80" fill="#FFF7EA"/>
+  <g stroke="#33231C" stroke-width="5" stroke-linecap="round" opacity="0.75">
+    <line x1="161" y1="98" x2="161" y2="110"/>
+    <line x1="231" y1="168" x2="219" y2="168"/>
+    <line x1="161" y1="238" x2="161" y2="226"/>
+    <line x1="91" y1="168" x2="103" y2="168"/>
+  </g>
+  <line x1="161" y1="168" x2="161" y2="112" stroke="#B3401E" stroke-width="10" stroke-linecap="round" transform="rotate(90 161 168)"/>
+  <circle cx="161" cy="168" r="10" fill="#B3401E"/>
+  <circle cx="131" cy="150" r="8" fill="#33231C"/>
+  <circle cx="191" cy="150" r="8" fill="#33231C"/>
+  <path d="M145,196 Q161,209 177,196" stroke="#33231C" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <g transform="rotate(-10 161 50)">
+    <path d="M103,56 C94,42 102,27 117,27 C119,11 138,3 152,10 C161,0 181,1 190,12 C206,7 220,19 215,33 C224,41 219,56 208,56 Z"
+      fill="#FFF7EA" stroke="#B3401E" stroke-width="5" stroke-linejoin="round"/>
+    <rect x="99" y="52" width="124" height="17" rx="5" fill="#FFF7EA" stroke="#B3401E" stroke-width="5"/>
+    <g stroke="#B3401E" stroke-width="3" opacity="0.45" stroke-linecap="round">
+      <line x1="128" y1="56" x2="128" y2="65"/>
+      <line x1="161" y1="56" x2="161" y2="65"/>
+      <line x1="194" y1="56" x2="194" y2="65"/>
+    </g>
+  </g>
+  </g>
+</svg>

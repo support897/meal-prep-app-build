@@ -1,0 +1,382 @@
+/* Display and body fonts, self hosted (SIL Open Font License, see vendor/fonts).
+   Fraunces: headings. Nunito Sans: everything else. No web font downloads. */
+@font-face { font-family: "Fraunces"; src: url("vendor/fonts/Fraunces.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Nunito Sans"; src: url("vendor/fonts/NunitoSans.ttf") format("truetype"); font-weight: 200 1000; font-display: swap; }
+/* Meal Prep styles. iPhone app look: flat, calm, lots of air, one type ladder. */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: "Nunito Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--ground); color: var(--ink); }
+a { color: var(--accent-deep); }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+#topStrip { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 11px; padding: 9px 16px; background: var(--ground); border-bottom: 1px solid var(--border); }
+.stripToggle { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--border2); background: var(--card); color: var(--accent-deep); display: flex; align-items: center; justify-content: center; }
+.stripToggle svg { width: 22px; height: 22px; }
+.stripLogo { width: 30px; height: 30px; border-radius: 8px; }
+.stripName { font-size: 18px; font-weight: 700; color: var(--ink); }
+#app { display: flex; min-height: 100vh; }
+/* Nav shape (two-shape law: HQ ruling 15 Oct 16:26, desktop realigned
+   15 Oct 16:31). Phone (up to 900px): the menu opens Muse style, most of
+   the screen with the page shrunk to a thin sliver at the edge (the full
+   viewport minus 44px); tapping the sliver, the strip button or Escape
+   closes it and the page comes back full width. Desktop (over 900px): the
+   settled split, a modest 272px panel beside content at full readable
+   width; the strip button or Escape closes it and the content stays live
+   beside the panel. Closed is fully gone at every width: zero pixels,
+   hidden on every load, never remembered. There is no icon rail state
+   anymore. */
+#sidebar { width: calc(100vw - 44px); flex: 0 0 calc(100vw - 44px); background: var(--sidebar); border-right: 1px solid var(--border); padding: 22px 16px; position: sticky; top: 53px; height: calc(100vh - 53px); overflow-y: auto; overflow-x: hidden; transition: width 0.23s ease-out, flex-basis 0.23s ease-out, padding 0.23s ease-out; }
+body.sidebarHidden #sidebar { width: 0; flex: 0 0 0; padding-left: 0; padding-right: 0; border-right: 0; overflow: hidden; visibility: hidden; transition: width 0.23s ease-out, flex-basis 0.23s ease-out, padding 0.23s ease-out, visibility 0s linear 0.23s; }
+/* Phone shape while open: the page sits compressed beside the menu, clipped
+   so it reads as a sliver; app.js turns any tap on it into a close, so the
+   controls underneath never fire. */
+body:not(.sidebarHidden) #main { overflow: hidden; }
+/* Desktop shape: the 272px panel beside content at full readable width.
+   The page is not clipped to a sliver and its controls stay live. */
+@media (min-width: 901px) {
+  #sidebar { width: 272px; flex: 0 0 272px; }
+  body:not(.sidebarHidden) #main { overflow: visible; }
+}
+.brand { display: flex; gap: 12px; align-items: center; margin-bottom: 26px; }
+.brandLogo { width: 46px; height: 46px; border-radius: 12px; }
+.brandName { font-size: 21px; font-weight: 700; }
+.brandSub { font-size: 13px; color: var(--brandmuted); font-weight: 600; }
+#mainNav { display: flex; flex-direction: column; gap: 6px; margin-bottom: 26px; }
+.navBtn { display: flex; align-items: center; gap: 11px; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 12px; font-size: 16px; font-weight: 600; color: var(--ink); width: 100%; }
+.navIcon { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.navIcon svg { width: 22px; height: 22px; }
+/* Icon set: Lucide (ISC licence, see ICONS-LICENCE.md). One consistent premium set for the
+   whole app. Icons inherit the text colour of their slot (brand tints live on the parents)
+   and one stroke weight everywhere. */
+.icon { width: 18px; height: 18px; flex: none; display: inline-block; vertical-align: -3px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.iconSm { width: 14px; height: 14px; }
+.mealGlyph { width: 15px; height: 15px; margin-right: 5px; }
+.legend > span { display: inline-flex; align-items: center; }
+/* Legend chips (app v35, item 64): each legend entry sits on its meal's
+   own soft chip, the fixed light ground the meal colours already travel
+   with, so the glyph's ink twin and the label read past the AA floor in
+   every theme. The label text takes the theme's fixed dark ink value,
+   the same treatment the meal badge uses on the same chip. */
+.legendChip { border-radius: 999px; padding: 3px 10px 3px 8px; color: #111827; font-weight: 600; }
+.searchWrap { position: relative; flex: 1; min-width: 200px; display: block; }
+.searchWrap input[type="text"] { padding-left: 40px; }
+.searchIcon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; pointer-events: none; }
+.emptyState { text-align: center; padding: 26px 10px; grid-column: 1 / -1; }
+.emptyCircle { width: 84px; height: 84px; border-radius: 50%; background: var(--soft); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+.iconEmpty { width: 44px; height: 44px; vertical-align: 0; }
+.icPink { background: var(--soft); color: var(--accent); }
+.icPeach { background: #FFF0E0; color: #B26A1B; }
+.icGreen { background: #E4F6E9; color: var(--fresh); }
+.icSky { background: #E1F2FE; color: #0369A1; }
+.icViolet { background: #EFE9FE; color: #6D4FC2; }
+.icRose { background: #F9DFCE; color: var(--accent-deep); }
+.icAmber { background: #FEF3C7; color: #A16207; }
+.navBtn.active { background: var(--soft); color: var(--accent-deep); font-weight: 700; }
+.navBtn.active .navIcon { background: var(--card); }
+/* Navigation calm (house law, 14 Oct): the menu is grouped by main area, one area
+   open at a time, and areas a person does not use can be tucked into Saved for later.
+   Group open state is session only; the tuck choices are saved settings. */
+.navGroup { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.navGroup:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.navGroupHead { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.navGroupBtn { flex: 1; display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; padding: 6px 10px; font-size: 12.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--brandmuted); }
+.navChev { transition: transform 0.15s ease; }
+.navGroup.closed .navChev, .navSaved.closed .navChev { transform: rotate(-90deg); }
+.navTuck { width: 30px; height: 30px; flex: 0 0 30px; border: 0; border-radius: 9px; background: transparent; color: var(--brandmuted); display: flex; align-items: center; justify-content: center; opacity: 0.75; }
+.navTuck:hover { background: var(--card); opacity: 1; }
+.navTuck:disabled { opacity: 0.3; cursor: not-allowed; }
+.navTuck:disabled:hover { background: transparent; }
+.navGroupItems { display: flex; flex-direction: column; gap: 6px; }
+.navGroup.closed .navGroupItems { display: none; }
+.navGroup.tucked { display: none; }
+.navFoot { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.navSaved { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.navSaved.empty { display: none; }
+.navSavedHead { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; border: 0; background: transparent; padding: 4px 10px 4px 0; font-size: 16px; font-weight: 600; color: var(--ink); }
+.navSavedHead .navChev { margin-left: auto; }
+.navSavedBody { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.navSaved.closed .navSavedBody { display: none; }
+.savedRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 4px 6px 10px; }
+.savedRowName { font-weight: 700; font-size: 15px; }
+.savedRowItems { font-size: 13px; color: var(--brandmuted); }
+.bringBack { border: 1px solid var(--border2); background: var(--card); border-radius: 999px; padding: 6px 12px; font-size: 13.5px; font-weight: 700; color: var(--accent-deep); white-space: nowrap; }
+.sideCard { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 34px; }
+.sideCardTitle { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.sideCardBody { font-size: 14px; color: var(--ink2); line-height: 1.55; }
+#main { flex: 1; min-width: 0; padding: 26px 30px 60px; max-width: 1180px; margin: 0 auto; width: 100%; }
+.view { display: none; }
+.view.active { display: block; }
+.topBar { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 20px; }
+h1, h2, h3, .brandName, .stripName, .sideCardTitle, .groupTitle, .mealName { font-family: "Fraunces", "Quicksand", ui-rounded, Georgia, "Times New Roman", serif; }
+h1 { font-size: 32px; margin: 0 0 6px; letter-spacing: 0; }
+h2 { font-size: 22px; margin: 0 0 12px; }
+h3 { font-size: 18px; margin: 18px 0 8px; }
+.sub { color: var(--muted); font-size: 15px; margin: 0; max-width: 560px; line-height: 1.5; }
+.hint { color: var(--muted); font-size: 14px; line-height: 1.55; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 22px; margin-bottom: 34px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.row input[type="text"] { flex: 1; min-width: 200px; }
+input[type="text"], input[type="number"], input[type="time"], input[type="date"], input[type="email"], input[type="password"], select, textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--inputline); border-radius: 10px; background: var(--card); color: var(--ink3); font-size: 16px; }
+textarea { resize: vertical; }
+label { display: block; font-size: 14px; font-weight: 600; color: var(--ink2); margin-bottom: 14px; }
+label input, label select, label textarea { margin-top: 6px; font-weight: 400; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+.primaryBtn { background: var(--accent-btn); color: #FFFFFF; border: 0; border-radius: 999px; padding: 12px 22px; font-size: 16px; font-weight: 700; }
+.pillBtn { background: var(--card); color: var(--ink3); border: 1px solid var(--inputline); border-radius: 999px; padding: 10px 18px; font-size: 15px; font-weight: 600; }
+.pillBtn.danger { color: var(--danger); border-color: var(--danger-line); }
+.roundBtn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--inputline); background: var(--card); color: var(--ink2); font-size: 22px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.calControls { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.segmented { display: flex; background: var(--soft); border-radius: 999px; padding: 3px; }
+.seg { border: 0; background: transparent; padding: 8px 16px; border-radius: 999px; font-size: 15px; font-weight: 600; color: var(--ink2); }
+.seg.active { background: var(--card); color: var(--ink3); }
+.navArrows { display: flex; gap: 8px; align-items: center; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-size: 14px; color: var(--ink2); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.monthGrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+.dayCell { min-width: 0; }
+.mealChip { overflow: hidden; }
+.weekHead { font-size: 13px; font-weight: 700; color: var(--muted); text-align: center; padding: 4px 0; text-transform: uppercase; }
+.dayCell { background: var(--card); border: 1px solid var(--line); border-radius: 6px; min-height: 118px; padding: 9px; text-align: left; width: 100%; cursor: pointer; }
+.dayCell.dim { opacity: 0.42; }
+.dayCell.today { border-color: var(--accent); border-width: 2px; }
+.dayNum { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.mealChip { display: block; width: 100%; text-align: left; border: 0; border-radius: 8px; padding: 4px 7px; font-size: 12px; font-weight: 600; margin-bottom: 4px; line-height: 1.3; }
+.weekGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+.weekCol { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px; min-height: 200px; }
+.weekCol h3 { margin-top: 0; font-size: 16px; }
+.mealCard { border: 0; border-radius: 10px; padding: 10px; width: 100%; text-align: left; margin-bottom: 10px; color: #33231C; }
+.mealCard .mealType { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; }
+.mealCard .mealName { font-size: 15px; font-weight: 700; margin: 3px 0; line-height: 1.35; color: #33231C; }
+.mealCard .mealMeta { font-size: 13px; color: #374151; }
+.dayMeals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.dayMealBig { border-radius: 6px; border: 1px solid var(--line); background: var(--card); padding: 20px; color: var(--ink); }
+.dayMealBig .mealName { font-size: 21px; }
+/* Build 5 reminders: a skipped meal renders dimmed wherever it is
+   listed; the skip tick sits quiet on the meal's own row. */
+.dayMealBig.skipped, .reminderRow.skipped { opacity: .55; }
+.skippedTag { display: inline-block; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: var(--line); color: var(--ink); margin-left: 8px; vertical-align: middle; }
+.skipTick { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; margin-left: 10px; cursor: pointer; vertical-align: middle; }
+.skipTick input { width: 17px; height: 17px; margin: 0; }
+/* The reminder mode row in Preferences: the choice and its fixed
+   time sit side by side inside the one field. */
+.modeRow { display: flex; gap: 8px; }
+.modeRow select, .modeRow input { flex: 1; min-width: 0; }
+select.swapSel { margin-top: 10px; }
+.yearGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.yearMonth { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.yearMonth h3 { margin-top: 0; }
+.miniGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.miniDay { border: 0; background: transparent; font-size: 11px; padding: 3px 0; border-radius: 6px; color: var(--ink2); }
+.miniDay.planned { background: var(--soft); font-weight: 700; color: var(--ink); }
+.miniDay.today { background: var(--accent-btn); color: #FFFFFF; font-weight: 700; }
+.recipeGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; }
+/* Issue 10 (Test filing): a very long recipe name stretched its card
+   far wider than its siblings. The card now has a width floor of zero
+   in the grid, and the name wraps inside the card, capped at 3 lines. */
+.recipeCard { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 18px; text-align: left; width: 100%; color: var(--ink); min-width: 0; }
+.mealName { color: var(--ink); }
+.recipeCard .mealName { font-size: 18px; font-weight: 700; margin: 6px 0; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.badge { display: inline-block; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.4px; }
+.chipRow { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 14px; }
+.chip { border: 1px solid var(--inputline); background: var(--card); color: var(--ink); border-radius: 999px; padding: 8px 15px; font-size: 15px; font-weight: 600; }
+.chip.on { background: var(--accent-btn); color: #FFFFFF; border-color: var(--accent-btn); }
+.tag { display: inline-block; background: var(--tagbg); border-radius: 999px; padding: 3px 10px; font-size: 13px; margin: 2px 4px 2px 0; }
+.personHead { display: flex; align-items: center; gap: 10px; }
+.avatarCircle { width: 40px; height: 40px; border-radius: 50%; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; flex: 0 0 40px; }
+.pantryRow, .shopRow, .reminderRow { display: flex; justify-content: space-between; gap: 14px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px; margin-bottom: 14px; }
+.pantryRow .pName, .shopRow .pName { font-size: 17px; font-weight: 700; }
+.pMeta { font-size: 14px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.useFirst { color: var(--danger); font-weight: 800; }
+.useSoon { color: var(--warn); font-weight: 800; }
+.fresh { color: var(--fresh); font-weight: 700; }
+.miniBtn { border: 1px solid var(--inputline); background: var(--card); color: var(--ink); border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.groupTitle { font-size: 18px; font-weight: 700; margin: 20px 0 10px; }
+.modal { position: fixed; inset: 0; background: rgba(17, 24, 39, 0.48); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 28px 14px; z-index: 50; }
+.modal.hidden, .hidden { display: none !important; }
+.modalCard { background: var(--card); border-radius: 16px; padding: 28px; max-width: 720px; width: 100%; }
+.modalCard.small { max-width: 520px; }
+.modalCard h2 { font-size: 27px; }
+.stepsList li, .ingList li { font-size: 16px; line-height: 1.6; margin-bottom: 8px; }
+.adaptBox { border-radius: 6px; border: 1px solid var(--line); padding: 16px; margin-bottom: 14px; background: var(--card); }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--on-ink); padding: 13px 22px; border-radius: 999px; font-size: 15px; font-weight: 600; z-index: 60; }
+.photoImg { max-width: 100%; border-radius: 6px; margin: 12px 0; border: 1px solid var(--line); }
+.detectRow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.detectRow input { width: 110px; }
+@media (max-width: 900px) {
+  /* Content only: the phone sidebar geometry lives in the base rules
+     (above), so nothing in here touches the sidebar any more. */
+  #main { padding: 20px 14px 50px; }
+  .monthGrid { grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .dayCell { min-height: 62px; padding: 4px; }
+  .mealChip { font-size: 9px; padding: 2px 3px; }
+  .weekHead { font-size: 9px; }
+  .weekGrid { grid-template-columns: 1fr; }
+  .dayMeals, .recipeGrid, .yearGrid, .grid2 { grid-template-columns: 1fr; }
+  .calControls { align-items: flex-start; }
+}
+body.sidebarHidden #main { max-width: none; }
+
+/* Law E backgrounds (the house standard section 5, Law E, 14 Oct): every user picks
+   their background, Brand, White, Black or their own photo, and the contrast
+   adapts. The :root tokens are the approved board look; body[data-bg] swaps
+   token values only, so every theme wears the same design. Contrast for every
+   text pair is proven by brand-board/contrast-themes.py (all pairs AA).
+   Two muted tones are tuned one step darker than the v16 literals so the
+   muted pairs pass AA on the cream and apricot grounds in every theme:
+   muted #6B7280 becomes #5F6772, brand muted #A06A48 becomes #8A5A38.
+   In the Black theme the data tones get bright twins of the same hue:
+   danger #F87171, warn #F0A24A, fresh #8FCB7A. Meal colours are data colours
+   that travel with their own soft chip in every theme and are unchanged.
+   v18 fix (QA F1): button classes that named no colour (.miniBtn, .chip,
+   .roundBtn) fell back to the browser default black, which never flips, so
+   their text and icons sat at 1.29:1 on the dark card. They now read the
+   theme ink tokens like the rest of the chrome, and the element pairs are
+   pinned in brand-board/contrast-themes.py.
+   v19 fix (QA F2): the same fault one class over. .mealName named no colour
+   and recipe titles inside button.recipeCard inherited the browser default
+   black (1.29:1 on the dark card). The card containers now carry the theme
+   ink (.recipeCard, .dayMealBig) and .mealName reads var(--ink) itself.
+   The week view .mealCard is the exception that proves the rule: its ground
+   is the meal's fixed light pastel chip (an inline data colour, light in
+   every theme), so its name and meta keep fixed dark tones (#33231C and
+   #374151, the light theme ink values, the same fixed ink treatment the
+   meal badge already uses on the same chip). Plain links named no colour
+   either and showed the browser default blue (1.73:1 on the dark card);
+   links now read var(--accent-deep). All pairs pinned in the same script. */
+:root {
+  --ground: #FFF7EA; --sidebar: #FDEBD9; --soft: #FDEBD9; --card: #FFFFFF;
+  --ink: #33231C; --ink2: #374151; --ink3: #111827;
+  --muted: #5F6772; --brandmuted: #8A5A38;
+  --accent: #B3401E; --accent-btn: #B3401E; --accent-deep: #8C3217;
+  --border: #EFDEC4; --border2: #EBCB9F; --line: #E5E7EB; --inputline: #D1D5DB;
+  --tagbg: #F3F4F6; --danger: #B91C1C; --danger-line: #FECACA;
+  --warn: #B45309; --fresh: #4C7A3F; --on-ink: #FFFFFF;
+}
+body[data-bg="white"] {
+  --ground: #FFFFFF; --sidebar: #FFF9F0; --soft: #FDEBD9;
+}
+body[data-bg="black"], body[data-bg="photo"][data-photo-mode="dark"] {
+  --ground: #1D130D; --sidebar: #261A12; --soft: #3A2718; --card: #2B1D15;
+  --ink: #FFF7EA; --ink2: #EBDFC9; --ink3: #FFF7EA;
+  --muted: #B3A58C; --brandmuted: #D2A26E;
+  --accent: #E8805A; --accent-btn: #C24824; --accent-deep: #F2A183;
+  --border: #3D2A1B; --border2: #4A3421; --line: #453322; --inputline: #5A4630;
+  --tagbg: #3A2718; --danger: #F87171; --danger-line: #8A4438;
+  --warn: #F0A24A; --fresh: #8FCB7A; --on-ink: #241812;
+}
+/* Icon chips in the dark reading: deep tinted grounds, brighter marks of the
+   same hues (graphical contrast proven in the same contrast script). */
+body[data-bg="black"] .icPink, body[data-bg="photo"][data-photo-mode="dark"] .icPink { background: #46271C; color: #F0937A; }
+body[data-bg="black"] .icPeach, body[data-bg="photo"][data-photo-mode="dark"] .icPeach { background: #463118; color: #F5B96E; }
+body[data-bg="black"] .icGreen, body[data-bg="photo"][data-photo-mode="dark"] .icGreen { background: #2C4423; color: #9CD489; }
+body[data-bg="black"] .icSky, body[data-bg="photo"][data-photo-mode="dark"] .icSky { background: #17394D; color: #6EC3F2; }
+body[data-bg="black"] .icViolet, body[data-bg="photo"][data-photo-mode="dark"] .icViolet { background: #33264D; color: #B79FF2; }
+body[data-bg="black"] .icRose, body[data-bg="photo"][data-photo-mode="dark"] .icRose { background: #46271C; color: #F0937A; }
+body[data-bg="black"] .icAmber, body[data-bg="photo"][data-photo-mode="dark"] .icAmber { background: #4A3A14; color: #F5C95E; }
+/* Photo background: a fixed layer behind the app. The photo sits under a
+   computed veil so words stay readable over any photo. The veil strengths
+   are solved, not guessed (brand-board/contrast-themes.py): with the veil
+   colour composited over a pure black photo and over a pure white photo,
+   the weakest text pair still passes AA. Light reading: Butter Cream veil
+   at 0.93. Dark reading: espresso veil at 0.89. Cards, the sidebar and the
+   top strip stay opaque in this theme; only the ground shows the photo. */
+#bgLayer { display: none; position: fixed; inset: 0; z-index: 0; background: var(--ground); }
+body[data-bg="photo"] { background: transparent; }
+body[data-bg="photo"] #bgLayer { display: block; }
+#bgPhoto { position: absolute; inset: 0; background-size: cover; background-position: center; }
+#bgVeil { position: absolute; inset: 0; background: #FFF7EA; opacity: 0.93; }
+body[data-photo-mode="dark"] #bgVeil { background: #241812; opacity: 0.89; }
+#app { position: relative; z-index: 1; }
+/* Appearance card in Preferences: four quiet swatch chips, radio behaviour. */
+.bgRow { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
+.langBlock { margin-top: 16px; }
+.bgChip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--inputline); background: var(--card); color: var(--ink3); border-radius: 999px; padding: 8px 15px; font-size: 15px; font-weight: 600; }
+.bgChip[aria-checked="true"] { border-color: var(--accent); color: var(--accent-deep); box-shadow: inset 0 0 0 1px var(--accent); }
+.bgSwatch { width: 18px; height: 18px; flex: 0 0 18px; border-radius: 50%; border: 1px solid var(--inputline); }
+.swBrand { background: #FDEBD9; }
+.swWhite { background: #FFFFFF; }
+.swBlack { background: #241812; }
+.swPhoto { background: linear-gradient(135deg, #FDEBD9 0%, #FDEBD9 50%, #B3401E 50%, #B3401E 100%); }
+
+/* v20: the setup guide (Mina), family colour palette, delete safety.
+   Guide card pieces read the theme tokens, so the guide holds up in all
+   four Law E themes. Poses are sized by width (brand-board/guide-poses). */
+.guideCard { max-width: 560px; }
+/* v33: the tour pop-up sits in the MIDDLE of the screen, the app
+   visible behind the modal dim. */
+#guideModal { align-items: center; }
+.tourTitle { font-size: 24px; line-height: 1.25; margin: 14px 0 0; }
+/* v33: the door page. A full first page holding only the sign up,
+   big and centred, the app waiting behind it. Board tokens only, so
+   it holds in all four Law E themes. The foot entries are lines of
+   quiet text, never buttons or form chrome. */
+.doorPage { position: fixed; inset: 0; z-index: 70; background: var(--ground); overflow-y: auto; display: flex; align-items: center; justify-content: center; padding: 28px 16px; }
+.doorInner { width: 100%; max-width: 380px; text-align: center; }
+.doorMark { width: 120px; height: 120px; border-radius: 28px; display: block; margin: 0 auto 10px; }
+.doorName { font-family: "Fraunces", serif; font-size: 34px; font-weight: 700; margin: 0 0 4px; }
+.doorSub { color: var(--muted); font-size: 16px; margin: 0 0 22px; }
+.doorSocial { display: flex; gap: 12px; justify-content: center; margin-bottom: 18px; }
+.doorIconBtn { width: 68px; height: 54px; border-radius: 14px; border: 1px solid var(--inputline); background: var(--card); display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.doorIconBtn svg { display: block; }
+.doorDivider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; font-weight: 600; margin: 2px 0 16px; }
+.doorDivider::before, .doorDivider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.doorField { text-align: left; margin-bottom: 14px; }
+.doorField label { margin-bottom: 0; }
+.doorNext { width: 64px; height: 64px; border-radius: 50%; border: 0; background: var(--accent-btn); color: #FFFFFF; font-size: 30px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; margin: 4px auto 0; padding: 0 0 4px; }
+.doorMsg { min-height: 22px; color: var(--ink2); font-size: 15px; font-weight: 600; margin: 10px 0 0; }
+.doorMsg:empty { min-height: 0; margin: 0; }
+.doorFoot { margin-top: 20px; display: flex; flex-direction: column; gap: 2px; align-items: center; }
+.doorFootLine { background: none; border: 0; color: var(--muted); font-size: 14.5px; font-weight: 600; cursor: pointer; padding: 6px 4px; }
+.doorFootLine:hover { color: var(--accent-deep); text-decoration: underline; }
+.doorPwTop { text-align: left; margin-bottom: 6px; }
+.doorBack { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--inputline); background: var(--card); color: var(--ink2); font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0 0 3px; }
+.doorEmailRow { display: flex; align-items: center; gap: 10px; justify-content: space-between; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; text-align: left; }
+.doorEmailText { font-weight: 700; word-break: break-all; }
+.doorPwWrap { position: relative; }
+.doorPwWrap input { padding-right: 64px; }
+.doorEye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: var(--accent-deep); font-weight: 700; font-size: 14px; cursor: pointer; padding: 6px; }
+.doorPrimary { width: 100%; margin-top: 2px; }
+.doorCaption { color: var(--muted); font-size: 14.5px; line-height: 1.5; margin: 12px 0 0; }
+.doorDemo { text-align: left; margin-top: 16px; }
+.guideTop { display: flex; align-items: flex-start; gap: 14px; }
+.minaPose { width: 104px; height: auto; flex: none; }
+.guideBubble { background: var(--soft); color: var(--ink); border-radius: 14px; padding: 10px 14px; font-family: "Fraunces", serif; font-weight: 700; font-size: 17px; line-height: 1.3; margin-top: 10px; }
+.guideX { margin-left: auto; flex: none; }
+.guideLine { font-size: 16px; line-height: 1.45; margin: 14px 0 6px; }
+.guideControl { margin-top: 8px; }
+.guideForm label { margin-bottom: 10px; }
+.guideFoot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.guideDots { display: inline-flex; gap: 6px; }
+.guideDot { width: 9px; height: 9px; border-radius: 50%; background: var(--inputline); display: inline-block; }
+.guideDot.on { background: var(--accent); }
+.guideFootBtns { margin-left: auto; display: inline-flex; gap: 10px; align-items: center; }
+.guideFoot .primaryBtn { width: auto; margin-top: 0; padding: 10px 20px; }
+.linkBtn { background: none; border: none; color: var(--accent-deep); font-weight: 700; font-size: 14px; cursor: pointer; padding: 6px 2px; text-decoration: underline; }
+.fieldLabel { display: block; font-size: 14px; font-weight: 600; color: var(--ink2); margin-bottom: 6px; }
+.colorChips { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.colorChip { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--inputline); cursor: pointer; padding: 0; }
+.colorChip.on { box-shadow: 0 0 0 3px var(--accent); }
+.toastUndoBtn { background: none; border: none; color: inherit; font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; padding: 0 2px; margin-left: 6px; }
+/* v32 upgrade moment popup: the two buttons carry equal weight, and
+   the close X sits at the card's top right. */
+.upgradeCard { position: relative; }
+.upgradeX { margin-left: auto; flex: none; }
+.upgradeBtns { align-items: stretch; }
+.upgradeBtns .primaryBtn, .upgradeBtns .pillBtn { padding: 12px 22px; font-size: 16px; font-weight: 700; margin-top: 0; }
+#confirmYes { background: var(--danger); }
+
+/* Calendar import (shared module, app v22): imported events sit under the
+   day's meals in month and week views and list in full in the day view.
+   Flat like everything else: a thin Paprika rule, no shadow. */
+.impLine { font-size: 11px; line-height: 1.35; color: var(--ink2); border-left: 3px solid var(--accent); padding-left: 5px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dayEvents { margin-top: 14px; }
+.impRow { padding: 8px 0; border-top: 1px solid var(--line); }
+.impRow:first-of-type { border-top: 0; }
+
+/* Account card (app v23, accounts wave). Flat like everything else:
+   the doors and forms reuse the app's buttons, rows and fields; the
+   only new shapes are the import offer inset and the demo label.
+   A demo session is labelled on every screen (DEMO-ACCOUNT-SPEC):
+   account-sync.js puts demoOn on the body while one runs. */
+.cardInner { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 10px 0; }
+body.demoOn::before { content: "Demo"; position: fixed; top: 10px; right: 12px; z-index: 60; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
