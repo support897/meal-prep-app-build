@@ -313,19 +313,34 @@
      no buttons, and the Plans card reads by its written lines
      alone. Plus only: the other plan has no products, so it has
      no buttons. A buy tap starts that period's purchase through
-     the payments seam; the restore line asks the seam to restore. */
+     the payments seam; the restore line asks the seam to restore.
+     App v48 (SR's G7 item) adds the paywall's legal furniture under
+     the restore line, in the same quiet voices: the renewal
+     disclosure (the three truths, prices riding the table tokens)
+     and the links row, Privacy Policy and Terms of Use. */
+  /* Apple's standard EULA: the Terms of Use target, named once. */
+  const PLANS_TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
   function renderPlansBuy() {
     const card = $("plansCard"); if (!card) return;
     const P = window.MP_PAYMENTS;
     let box = $("plansBuy");
     if (box) box.remove();
     if (!P || typeof P.enabled !== "function" || !P.enabled()) return;
+    /* The Privacy Policy link speaks the address the Settings row
+       already carries: read it off that row, so the address stands
+       written in exactly one place in the app. */
+    const privRow = document.querySelector("a[data-i18n='data.privacy']");
+    const privHref = privRow ? privRow.getAttribute("href") : "";
     box = document.createElement("div"); box.id = "plansBuy";
     box.innerHTML =
       "<p class='hint'>" + t("plans.buyFreeLine") + "</p>" +
       "<div class='row'><button class='primaryBtn' id='buyPlusMonthly'>" + t("plans.buyMonthly") + "</button>" +
       "<button class='primaryBtn' id='buyPlusYearly'>" + t("plans.buyYearly") + "</button></div>" +
-      "<div class='row'><button class='linkBtn' id='restorePurchase'>" + t("plans.restore") + "</button></div>";
+      "<div class='row'><button class='linkBtn' id='restorePurchase'>" + t("plans.restore") + "</button></div>" +
+      "<p class='hint'>" + t("plans.disclosure") + "</p>" +
+      "<div class='row'>" +
+      (privHref ? "<a class='linkBtn' id='plansPrivacyLink' href='" + privHref + "' target='_blank' rel='noopener'>" + t("data.privacy") + "</a>" : "") +
+      "<a class='linkBtn' id='plansTermsLink' href='" + PLANS_TERMS_URL + "' target='_blank' rel='noopener'>" + t("plans.terms") + "</a></div>";
     card.appendChild(box);
     box.querySelector("#buyPlusMonthly").addEventListener("click", function () { P.tryPlus(null, "month"); });
     box.querySelector("#buyPlusYearly").addEventListener("click", function () { P.tryPlus(null, "year"); });

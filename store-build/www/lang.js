@@ -321,6 +321,11 @@
     "plans.buyMonthly": "Plus, {plusMonthly}{worthPlusMonthly} a month",
     "plans.buyYearly": "Plus, {plusYearly}{worthPlusYearly} a year",
     "plans.restore": "Restore a purchase",
+    /* paywall disclosure + links row (app v48, SR's G7 item): the
+       three renewal truths under the buy box, in plain words, with
+       the prices riding the table tokens like every other price */
+    "plans.disclosure": "Plus renews automatically at {plusMonthly} a month or {plusYearly} a year until you cancel. Cancel any time in your Apple ID subscriptions. Plus stays open until the end of the period you have paid for.",
+    "plans.terms": "Terms of Use",
     /* appearance */
     "appear.title": "Appearance",
     "appear.hint": "Pick the background the app wears. Brand is the Meal Prep look, and it stays the standard look.",
@@ -848,6 +853,8 @@
     "plans.buyMonthly": "Plus, {plusMonthly}{worthPlusMonthly} al mes",
     "plans.buyYearly": "Plus, {plusYearly}{worthPlusYearly} al año",
     "plans.restore": "Restaurar una compra",
+    "plans.disclosure": "Plus se renueva automáticamente a {plusMonthly} al mes o {plusYearly} al año hasta que lo canceles. Cancela cuando quieras en tus suscripciones de Apple ID. Plus sigue abierto hasta el final del periodo que ya pagaste.",
+    "plans.terms": "Términos de uso",
     "appear.title": "Apariencia",
     "appear.hint": "Elige el fondo que usa la app. Marca es el aspecto de Meal Prep, y sigue siendo el aspecto estándar.",
     "appear.groupLabel": "Fondo",
