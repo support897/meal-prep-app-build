@@ -277,13 +277,13 @@
     upgradeWant = null;
     if (w) showGateLine(w);
   }
-  /* The honest route: while the payment rails sleep (payments.js
-     dormant, the shipped state until the Paid Apps sitting), Try
-     fakes no checkout, no trial start and no store sheet. It lands
-     on the Plans card in Preferences, which says in plain words
-     that Plus opens at launch and that this is where it will start.
-     Live, tryPlus starts the real purchase and only a dormant
-     answer falls through to the card. */
+  /* The honest route: Try starts the real purchase through the
+     payments seam (live since the enabling build, app v47). Only
+     a dormant answer falls through to the Plans card in
+     Preferences: the copy that cannot run the rails (the open
+     web, until the web lane's own sitting) fakes no checkout, no
+     trial start and no store sheet, and lands on the card, whose
+     priced on-sale statement stands beside the offer. */
   function goPlans() { switchView("prefs"); const c = $("plansCard"); if (c) setTimeout(function () { c.scrollIntoView({ behavior: "smooth", block: "start" }); }, 60); }
   $("upgradeNotNow").addEventListener("click", hideUpgrade);
   $("upgradeX").addEventListener("click", hideUpgrade);
@@ -294,6 +294,43 @@
     if (P && typeof P.tryPlus === "function" && P.enabled()) { P.tryPlus(w).then(function (r) { if (r && r.dormant) goPlans(); }); }
     else goPlans();
   });
+
+  /* The buy surface (app v46; the buy button law of 19 Oct, via
+     Finance: in the payments enabling build the buy buttons are
+     built FIRST, in the app's whole brand, indistinguishable from
+     the app's own buttons; a generic or bolted on button is a gate
+     failure). These are the app's own buttons and nothing else:
+     the same primaryBtn the door's Continue and Save preferences
+     wear, the same quiet linkBtn the door's Change line speaks in,
+     the app's own DOM built here in app.js, no hosted paywall
+     surface anywhere. The words are the copy of record's voice and
+     the prices are never written here: the labels route through
+     the language strings, whose price tokens the prices table
+     fills at render, exactly like the offer line above.
+     The surface stands only while the payment rails are live
+     (payments.js enabled, the config the enabling build filled,
+     app v47). While the rails sleep it renders NOTHING: no box,
+     no buttons, and the Plans card reads by its written lines
+     alone. Plus only: the other plan has no products, so it has
+     no buttons. A buy tap starts that period's purchase through
+     the payments seam; the restore line asks the seam to restore. */
+  function renderPlansBuy() {
+    const card = $("plansCard"); if (!card) return;
+    const P = window.MP_PAYMENTS;
+    let box = $("plansBuy");
+    if (box) box.remove();
+    if (!P || typeof P.enabled !== "function" || !P.enabled()) return;
+    box = document.createElement("div"); box.id = "plansBuy";
+    box.innerHTML =
+      "<p class='hint'>" + t("plans.buyFreeLine") + "</p>" +
+      "<div class='row'><button class='primaryBtn' id='buyPlusMonthly'>" + t("plans.buyMonthly") + "</button>" +
+      "<button class='primaryBtn' id='buyPlusYearly'>" + t("plans.buyYearly") + "</button></div>" +
+      "<div class='row'><button class='linkBtn' id='restorePurchase'>" + t("plans.restore") + "</button></div>";
+    card.appendChild(box);
+    box.querySelector("#buyPlusMonthly").addEventListener("click", function () { P.tryPlus(null, "month"); });
+    box.querySelector("#buyPlusYearly").addEventListener("click", function () { P.tryPlus(null, "year"); });
+    box.querySelector("#restorePurchase").addEventListener("click", function () { P.restore(); });
+  }
 
   function expiringNames() {
     return L.sortByExpiry(state.pantry, new Date()).slice(0, 8).map(function (i) { return i.name; });
@@ -1139,6 +1176,10 @@
     $("setupMinutes").value = state.setupMinutes;
     renderAppearance();
     renderLanguage();
+    /* The Plans card's buy surface (app v46): renders its buttons
+       only while the payment rails are live; while they sleep this
+       call leaves the card exactly as it ships. */
+    renderPlansBuy();
   }
   /* Language row (app v34): the pick is saved in settings (user
      data, Law B), mirrored for the next boot's first paint, and the

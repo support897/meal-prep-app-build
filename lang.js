@@ -312,8 +312,15 @@
     "plans.title": "Plans",
     "plans.freeLine": "You are on the Free plan. The calendar, the recipes, cooking reminders, your data export and every allergy adaptation stay free in every plan, forever.",
     "plans.plusLine": "Meal Prep Plus is {plusMonthly}{worthPlusMonthly} a month or {plusYearly}{worthPlusYearly} a year, and your first month is free. Plus adds profiles for your whole table, the grocery list built from your plan, best until dates on your groceries, fridge photo help, and unlimited plans and your own recipes.",
-    "plans.notYetLine": "Plus is not on sale yet. It opens at launch, and this card is where you will start it.",
+    "plans.onSaleLine": "Plus is on sale now, and this card is where you start it.",
     "plans.familyLine": "Meal Prep Family is {familyMonthly}{worthFamilyMonthly} a month or {familyYearly}{worthFamilyYearly} a year. It comes later, when its extras are built.",
+    /* buy surface (app v46): the enabling build's buttons, built
+       first and in brand; prices ride the table tokens like every
+       other price in the app, never written into the words */
+    "plans.buyFreeLine": "Your first month is free. Cancel any time.",
+    "plans.buyMonthly": "Plus, {plusMonthly}{worthPlusMonthly} a month",
+    "plans.buyYearly": "Plus, {plusYearly}{worthPlusYearly} a year",
+    "plans.restore": "Restore a purchase",
     /* appearance */
     "appear.title": "Appearance",
     "appear.hint": "Pick the background the app wears. Brand is the Meal Prep look, and it stays the standard look.",
@@ -835,8 +842,12 @@
     "plans.title": "Planes",
     "plans.freeLine": "Estás en el plan Gratis. El calendario, las recetas, los recordatorios de cocina, la descarga de tus datos y cada adaptación por alergia quedan gratis en cada plan, para siempre.",
     "plans.plusLine": "Meal Prep Plus cuesta {plusMonthly}{worthPlusMonthly} al mes o {plusYearly}{worthPlusYearly} al año, y tu primer mes es gratis. Plus añade perfiles para toda tu mesa, la lista de compras hecha con tu plan, fechas de mejor hasta en tus comestibles, ayuda con la foto de tu nevera, y planes y recetas propias sin límite.",
-    "plans.notYetLine": "Plus todavía no está a la venta. Abre en el lanzamiento, y esta tarjeta es donde lo empezarás.",
+    "plans.onSaleLine": "Plus ya está a la venta, y esta tarjeta es donde lo empiezas.",
     "plans.familyLine": "Meal Prep Family cuesta {familyMonthly}{worthFamilyMonthly} al mes o {familyYearly}{worthFamilyYearly} al año. Llega después, cuando sus extras estén listos.",
+    "plans.buyFreeLine": "Tu primer mes es gratis. Cancela cuando quieras.",
+    "plans.buyMonthly": "Plus, {plusMonthly}{worthPlusMonthly} al mes",
+    "plans.buyYearly": "Plus, {plusYearly}{worthPlusYearly} al año",
+    "plans.restore": "Restaurar una compra",
     "appear.title": "Apariencia",
     "appear.hint": "Elige el fondo que usa la app. Marca es el aspecto de Meal Prep, y sigue siendo el aspecto estándar.",
     "appear.groupLabel": "Fondo",

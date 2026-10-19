@@ -335,6 +335,81 @@
   }
 
   /* ------------------------------------------------------------------
+     The entitlement record (PAYMENTS-CHAPTER-PLAN section 3, the
+     wiring order of 19 Oct): subscriptions/{uid}, ONE record per
+     user, written ONLY by the payment receivers (the RevenueCat
+     and Stripe webhook receivers). The rules deny every client
+     write to it (allow write: if false) and this app never
+     attempts one: it READS its own record and resolves from it.
+     The shape is the chapter's: app_user_id, entitlement, status,
+     product, lane, trial_ends_at, period_ends_at, expires_at,
+     updated_at, source_event_id. THE UNLOCK RULE (the chapter's
+     only rule): a paid feature opens when the record shows the
+     app's entitlement ("plus" for Meal Prep) with status trialing
+     or active and the period or window has not ended. Cancel
+     closes at period end (the chapter's section 6 proof order),
+     so a cancelled record still inside its paid period opens and
+     past it stays shut; a cancel naming no period end cannot
+     prove a live window and stays shut. Past due, expired, an
+     unknown or missing status, a record for another entitlement
+     (Family's held entitlement included: it has no products and
+     opens nothing), a missing record and a read the rules refuse
+     all resolve free: fail closed, like every entitlement read
+     in this file. Free features never consult the record at all:
+     the one read lives on the sign in entitlement resolution in
+     account-sync.js, beside syncTier above, and getEntitlement
+     only ever reads the resolved session value. */
+  function subscriptionPath(uid) { return "subscriptions/" + uid; }
+  /* An end field in the shapes the record may carry it: epoch
+     milliseconds (a number), an ISO string, or a Firestore
+     timestamp ({ seconds, nanoseconds } or { toMillis() }).
+     Anything else is not an end and reads as absent. */
+  function recordEndMs(v) {
+    if (typeof v === "number" && isFinite(v)) return v;
+    if (typeof v === "string" && v) { var ms = Date.parse(v); return isFinite(ms) ? ms : null; }
+    if (isPlainObj(v)) {
+      if (typeof v.toMillis === "function") { try { var m = v.toMillis(); return typeof m === "number" && isFinite(m) ? m : null; } catch (e) { return null; } }
+      if (typeof v.seconds === "number" && isFinite(v.seconds)) return v.seconds * 1000 + Math.floor(num(v.nanoseconds, 0) / 1e6);
+    }
+    return null;
+  }
+  function entitlementFromRecord(record, nowMs) {
+    if (!isPlainObj(record)) return "free";
+    if (record.entitlement !== "plus") return "free";
+    var now = typeof nowMs === "number" && isFinite(nowMs) ? nowMs : Date.now();
+    var ends = [recordEndMs(record.period_ends_at), recordEndMs(record.expires_at)].filter(function (x) { return x !== null; });
+    if (record.status === "trialing") {
+      var trialEnd = recordEndMs(record.trial_ends_at);
+      if (trialEnd !== null) ends.push(trialEnd);
+      return ends.some(function (e) { return now >= e; }) ? "free" : "pro";
+    }
+    if (record.status === "active") {
+      return ends.some(function (e) { return now >= e; }) ? "free" : "pro";
+    }
+    if (record.status === "cancelled") {
+      if (!ends.length) return "free";
+      return ends.some(function (e) { return now >= e; }) ? "free" : "pro";
+    }
+    return "free";
+  }
+  /* The read itself, through the store seam: getDoc only. This is
+     the record's only read in client code, and the record is
+     written nowhere in client code at all. A denied or failed
+     read resolves free: an unreadable record proves nothing, and
+     only proof opens a paid gate. Demo sessions are skipped
+     before any call (the rules refuse an anonymous read anyway,
+     and the demo never carries a purchased record). */
+  function readEntitlementRecord(store, uid, opts) {
+    opts = opts || {};
+    if (!uid || opts.demo) return Promise.resolve({ entitlement: "free", record: null, skipped: true });
+    return store.getDoc(subscriptionPath(uid)).then(function (rec) {
+      return { entitlement: entitlementFromRecord(rec, opts.nowMs), record: isPlainObj(rec) ? rec : null, skipped: false };
+    }, function () {
+      return { entitlement: "free", record: null, skipped: false };
+    });
+  }
+
+  /* ------------------------------------------------------------------
      Activation (design section 11, confirmed with the pattern owner):
      "first meal planned" — the first meal that lands on a day through
      the user's OWN action: an add, a swap, or the Plan my first week
@@ -801,6 +876,7 @@
     stateToProfile: stateToProfile, profileCreateFields: profileCreateFields,
     stateToDocs: stateToDocs, repairDoc: repairDoc, docsToState: docsToState, accountHasData: accountHasData,
     tierPath: tierPath, planLineFor: planLineFor, syncTier: syncTier,
+    subscriptionPath: subscriptionPath, entitlementFromRecord: entitlementFromRecord, readEntitlementRecord: readEntitlementRecord,
     ACTIVATION_SOURCES: ACTIVATION_SOURCES, noteActivation: noteActivation,
     contribPath: contribPath, buildContrib: buildContrib, cleanStamps: cleanStamps, mergeStamps: mergeStamps, stampStep: stampStep, stampChain: stampChain, computeAggregates: computeAggregates, weekKey: weekKey,
     subscriptionRecord: subscriptionRecord, reviewRecord: reviewRecord,

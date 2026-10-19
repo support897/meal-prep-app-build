@@ -23,18 +23,23 @@
   /* getEntitlement (v32) lets app.js read this session's resolved
      entitlement for the upgrade moment popup; it resolves fail
      closed ("free" until syncTier lands, and in dormant builds,
-     where the accounts layer never runs, everyone is free).
-     The payments seam (payments build): the read also asks the
-     payments module for its opinion, and a "pro" from either source
-     wins. Dormant, the module holds no opinion (null) and this read
-     is exactly the v32 one; a payments "free" never downgrades a
-     comped or tier user, it only ever adds a road to "pro". */
+     where the accounts layer never runs, everyone is free). The
+     session value it reads is resolved once at sign in: the tier
+     (syncTier, from the comp record) joined by the entitlement
+     record read (app v45: subscriptions/{uid}, system written
+     only) on that same path in onUser below. This function itself
+     never touches the store, so no feature render ever consults
+     the record.
+     SOLE AUTHORITY (app v47, HQ's fence, spoken for this build in
+     v45): the session value is the whole answer. The transitional
+     local-opinion seam that stood here in v45 and v46 is DELETED
+     whole: from this build on, the server-owned records (the comp
+     record behind syncTier; the entitlement record at
+     subscriptions/{uid}) alone — present or absent — decide, and a
+     local plan flag or a cached provider opinion opens nothing.
+     The payments module is never consulted on this read. */
   window.MP_ACCOUNT_SYNC = { enabled: window.MP_ACCOUNTS_ENABLED, getEntitlement: function () {
-    var base = typeof entitlement === "string" ? entitlement : "free";
-    if (base === "pro") return "pro";
-    var P = window.MP_PAYMENTS;
-    if (P && typeof P.entitlementOpinion === "function" && P.entitlementOpinion() === "pro") return "pro";
-    return base;
+    return typeof entitlement === "string" ? entitlement : "free";
   }, _doorFail: doorFail, _doorLineFor: doorLineFor, _demoLineFor: demoLineFor };
   /* The door's credential code fence (app v33). It stands above
      the dormancy return (moved up in v42) so the door's error
@@ -859,14 +864,32 @@
         }).then(function (t) {
           if (t) {
             entitlement = t.entitlement;
-            /* The payments opinion refreshes beside the tier read
-               (payments build). Dormant, refresh() resolves at
-               once with no opinion and no call, so this line is a
-               no-op until the Paid Apps sitting fills the slot. */
-            if (window.MP_PAYMENTS && window.MP_PAYMENTS.enabled()) window.MP_PAYMENTS.refresh();
-            renderSignedIn(user, {});
-            nameAskFlow(user, pulledDocs);
-            return dailyStamps(user, false);
+            /* The entitlement record joins the resolution here
+               (payments wiring, app v45; PAYMENTS-CHAPTER-PLAN
+               section 3) — for a paying user it is the primary
+               and shaping authority: the client reads its OWN
+               record at subscriptions/{uid} — system written only,
+               the rules deny every client write — and a live Plus
+               stamp folds pro into the session entitlement the
+               gates read. This is the record's one read in the
+               app: it happens once, on this resolution path, and
+               getEntitlement itself stays a pure session read, so
+               no free feature ever consults the record. A denied
+               or failed read resolves free (fail closed). */
+            return A.readEntitlementRecord(store, user.uid, { demo: false }).then(function (r) {
+              if (r && r.entitlement === "pro") entitlement = "pro";
+              /* The payments module warms up beside the record read
+                 (enabling build, app v47): refresh hands the real
+                 provider this account's id (the app user id in the
+                 brain is the app's own account id, RC-MAPPING), so a
+                 later buy or restore speaks for the right person.
+                 No gate reads its opinion: the record above is the
+                 sole authority (HQ's fence). */
+              if (window.MP_PAYMENTS && window.MP_PAYMENTS.enabled()) window.MP_PAYMENTS.refresh(user.uid);
+              renderSignedIn(user, {});
+              nameAskFlow(user, pulledDocs);
+              return dailyStamps(user, false);
+            });
           }
         });
       }).catch(function () { renderSignedIn(user, {}); });

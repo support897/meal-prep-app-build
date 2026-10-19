@@ -13,6 +13,7 @@
 	"webDir": "www",
 	"packageClassList": [
 		"FirebaseAuthenticationPlugin",
-		"LocalNotificationsPlugin"
+		"LocalNotificationsPlugin",
+		"PurchasesPlugin"
 	]
 }
