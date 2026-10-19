@@ -171,9 +171,27 @@
     return sdkPromise;
   }
 
+  /* The Auth record's own time stamps, in milliseconds (app v51):
+     creationTime is stamped by the Auth service when the account
+     was created and no client write path moves it in either
+     direction, which is why the free month anchor and the sign in
+     resolution's provably new test read it (accounts.js,
+     accountAnchorMs and provablyNewAccount) and never the client
+     writable Firestore createdAt field (QA's build 13 anchor
+     probe, verdict 5ff194fe). Any shape the record may carry the
+     stamp in is read; an absent or unreadable stamp is null, and
+     null anchors to nothing. */
+  function authTsMs(v) {
+    if (typeof v === "number" && isFinite(v) && v > 0) return v;
+    if (typeof v === "string" && v) { var ms = Date.parse(v); return isFinite(ms) ? ms : null; }
+    if (v && typeof v === "object" && typeof v.seconds === "number" && isFinite(v.seconds)) return v.seconds * 1000 + Math.floor((typeof v.nanoseconds === "number" && isFinite(v.nanoseconds) ? v.nanoseconds : 0) / 1e6);
+    return null;
+  }
+
   function normUser(u) {
     if (!u) return null;
-    return { uid: u.uid, email: u.email || null, displayName: u.displayName || null, isAnonymous: u.isAnonymous === true, providers: (u.providerData || []).map(function (p) { return p.providerId; }) };
+    var md = u.metadata && typeof u.metadata === "object" ? u.metadata : {};
+    return { uid: u.uid, email: u.email || null, displayName: u.displayName || null, isAnonymous: u.isAnonymous === true, providers: (u.providerData || []).map(function (p) { return p.providerId; }), createdAtMs: authTsMs(md.creationTime), lastSignInAtMs: authTsMs(md.lastSignInTime) };
   }
 
   /* ----------------------------------------------------------------

@@ -311,6 +311,7 @@
     /* plans card (the v32 offer's honest home) */
     "plans.title": "Plans",
     "plans.freeLine": "You are on the Free plan. The calendar, the recipes, cooking reminders, your data export and every allergy adaptation stay free in every plan, forever.",
+    "plans.topLine": "You are on the Top plan. The calendar, the recipes, cooking reminders, your data export and every allergy adaptation stay free in every plan, forever.",
     "plans.plusLine": "Meal Prep Plus is {plusMonthly}{worthPlusMonthly} a month or {plusYearly}{worthPlusYearly} a year, and your first month is free. Plus adds profiles for your whole table, the grocery list built from your plan, best until dates on your groceries, fridge photo help, and unlimited plans and your own recipes.",
     "plans.onSaleLine": "Plus is on sale now, and this card is where you start it.",
     "plans.familyLine": "Meal Prep Family is {familyMonthly}{worthFamilyMonthly} a month or {familyYearly}{worthFamilyYearly} a year. It comes later, when its extras are built.",
@@ -858,6 +859,7 @@
     "confirm.clearPlanText": "Esto quita cada comida de tu plan. Tus recetas, tu familia y tus comestibles quedan como están.",
     "plans.title": "Planes",
     "plans.freeLine": "Estás en el plan Gratis. El calendario, las recetas, los recordatorios de cocina, la descarga de tus datos y cada adaptación por alergia quedan gratis en cada plan, para siempre.",
+    "plans.topLine": "Estás en el plan superior. El calendario, las recetas, los recordatorios de cocina, la descarga de tus datos y cada adaptación por alergia quedan gratis en cada plan, para siempre.",
     "plans.plusLine": "Meal Prep Plus cuesta {plusMonthly}{worthPlusMonthly} al mes o {plusYearly}{worthPlusYearly} al año, y tu primer mes es gratis. Plus añade perfiles para toda tu mesa, la lista de compras hecha con tu plan, fechas de mejor hasta en tus comestibles, ayuda con la foto de tu nevera, y planes y recetas propias sin límite.",
     "plans.onSaleLine": "Plus ya está a la venta, y esta tarjeta es donde lo empiezas.",
     "plans.familyLine": "Meal Prep Family cuesta {familyMonthly}{worthFamilyMonthly} al mes o {familyYearly}{worthFamilyYearly} al año. Llega después, cuando sus extras estén listos.",

@@ -410,6 +410,95 @@
   }
 
   /* ------------------------------------------------------------------
+     Answer adjudication (app v51, QA's build 13 retest, verdict
+     5ff194fe, Finding 2 STANDS UNCURED on v50): under a Listen only
+     strangle the vendored SDK resolved the { source: "server" }
+     gets EMPTY out of its internal state (the wedge pends every
+     network request forever, yet the gets still answered, empty,
+     within seconds), so the resolution completed into the fail
+     soft signed in state with no rejection, no timeout, and the
+     slowLoad line — wired only to the timeout class — never stood.
+     v50's source cure assumed the read would pend or refuse; this
+     shape does neither, it ANSWERS, wrongly. The cure judges the
+     ANSWER, on the success path, before anything is adopted or
+     created from it: an answer that carries no profile and no
+     record in any collection is LOADED only when the account is
+     provably new (below); every other empty answer is NOT LOADED,
+     and the glue renders its local truth with the honest line and
+     retries the whole pull rather than adopting a silence. */
+  function docsAreEmpty(docs) {
+    if (!isPlainObj(docs)) return true;
+    if (isPlainObj(docs.profile)) return false;
+    var cols = isPlainObj(docs.collections) ? docs.collections : {};
+    return COLLECTIONS.every(function (kind) {
+      var bag = cols[kind];
+      return !isPlainObj(bag) || Object.keys(bag).length === 0;
+    });
+  }
+  /* Provably new: the account's Auth record was created within a
+     tight window of this session (ten minutes, with a minute of
+     clock skew forgiven) AND this device holds no per account
+     cache for the uid. Either arm failing defeats the proof: a
+     returning account's creation stamp is old by definition, and
+     a device that has cached this account's copy before has seen
+     an account with a past, however fresh the stamp looks. The
+     creation stamp itself is the Auth record's own metadata (see
+     accountAnchorMs below), never a client written field. */
+  var NEW_ACCOUNT_WINDOW_MS = 10 * 60 * 1000;
+  function provablyNewAccount(proof) {
+    proof = isPlainObj(proof) ? proof : {};
+    if (proof.hasDeviceCache) return false;
+    var created = proof.authCreatedAtMs;
+    if (typeof created !== "number" || !isFinite(created)) return false;
+    var now = (typeof proof.nowMs === "number" && isFinite(proof.nowMs)) ? proof.nowMs : Date.now();
+    var age = now - created;
+    return age >= -60000 && age <= NEW_ACCOUNT_WINDOW_MS;
+  }
+  function adjudicatePull(docs, proof) {
+    if (!docsAreEmpty(docs)) return "loaded";
+    return provablyNewAccount(proof) ? "loaded" : "notLoaded";
+  }
+
+  /* ------------------------------------------------------------------
+     The free month anchor (app v51, QA's build 13 retest, verdict
+     5ff194fe, Leg 4 — NEW FINDING): the anchor the free month is
+     judged from was users/{uid}.createdAt, and the account owner
+     can rewrite that field in BOTH directions on production (the
+     anchor probe moved it 40 days back and a day forward; both
+     writes landed), so pushing it forward restarts the free month
+     indefinitely — the Pace F1 exploit shape. The app itself never
+     moves the field (it is set once, at profile creation, from
+     the server timestamp sentinel, and later pushes carry the
+     stored value forward exactly as read), but no entitlement or
+     trial judgement may rest on a value the judged party can move.
+     The anchor is therefore the Firebase Auth record's own
+     creation stamp (user.metadata.creationTime, carried onto the
+     normalised user by auth.js as createdAtMs): stamped by the
+     Auth service when the account was created, with no client
+     write path in either direction. The Firestore field stays as
+     bookkeeping only and is read for nothing that decides. A user
+     whose Auth stamp is unavailable anchors to NOTHING, and no
+     anchor earns no free month — the failure falls toward no free
+     month, never toward a restarted one. */
+  function accountAnchorMs(authUser) {
+    var v = isPlainObj(authUser) ? authUser.createdAtMs : null;
+    return (typeof v === "number" && isFinite(v) && v > 0) ? v : null;
+  }
+  function freeMonthEndsMs(anchorMs) {
+    if (typeof anchorMs !== "number" || !isFinite(anchorMs)) return null;
+    var d = new Date(anchorMs);
+    d.setMonth(d.getMonth() + 1);
+    var end = d.getTime();
+    return isFinite(end) ? end : null;
+  }
+  function withinFreeMonth(anchorMs, nowMs) {
+    var end = freeMonthEndsMs(anchorMs);
+    if (end === null) return false;
+    var now = (typeof nowMs === "number" && isFinite(nowMs)) ? nowMs : Date.now();
+    return now >= anchorMs && now < end;
+  }
+
+  /* ------------------------------------------------------------------
      Activation (design section 11, confirmed with the pattern owner):
      "first meal planned" — the first meal that lands on a day through
      the user's OWN action: an add, a swap, or the Plan my first week
@@ -883,6 +972,8 @@
     stateToDocs: stateToDocs, repairDoc: repairDoc, docsToState: docsToState, accountHasData: accountHasData,
     tierPath: tierPath, planLineFor: planLineFor, syncTier: syncTier,
     subscriptionPath: subscriptionPath, entitlementFromRecord: entitlementFromRecord, readEntitlementRecord: readEntitlementRecord,
+    docsAreEmpty: docsAreEmpty, provablyNewAccount: provablyNewAccount, adjudicatePull: adjudicatePull, NEW_ACCOUNT_WINDOW_MS: NEW_ACCOUNT_WINDOW_MS,
+    accountAnchorMs: accountAnchorMs, freeMonthEndsMs: freeMonthEndsMs, withinFreeMonth: withinFreeMonth,
     ACTIVATION_SOURCES: ACTIVATION_SOURCES, noteActivation: noteActivation,
     contribPath: contribPath, buildContrib: buildContrib, cleanStamps: cleanStamps, mergeStamps: mergeStamps, stampStep: stampStep, stampChain: stampChain, computeAggregates: computeAggregates, weekKey: weekKey,
     subscriptionRecord: subscriptionRecord, reviewRecord: reviewRecord,

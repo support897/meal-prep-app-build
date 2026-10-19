@@ -366,6 +366,21 @@
   const PLANS_TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
   function renderPlansBuy() {
     const card = $("plansCard"); if (!card) return;
+    /* The card's state line speaks the LIVE entitlement (app v51,
+       the sweep line cure: QA's build 13 sweep found the shipped
+       line was static markup telling EVERY reader "You are on
+       the Free plan", a resolved Plus holder included, while the
+       truth stood only on the account card). It renders here,
+       ahead of the dormancy gate below: which plan a person
+       holds never waits on the buy surface. A free session hears
+       the standing free sentence; a resolved Plus session hears
+       its plan named the way the account card names it
+       (plans.topLine, the Top plan). The entitlement resolution
+       re-renders the open view and this call rides the prefs
+       render, so the line lands with the resolution; a language
+       switch reloads the page into the same render. */
+    const stateLine = $("plansStateLine");
+    if (stateLine) stateLine.textContent = t(plusActive() ? "plans.topLine" : "plans.freeLine");
     const P = window.MP_PAYMENTS;
     let box = $("plansBuy");
     if (box) box.remove();

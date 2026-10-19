@@ -40,7 +40,15 @@
      The payments module is never consulted on this read. */
   window.MP_ACCOUNT_SYNC = { enabled: window.MP_ACCOUNTS_ENABLED, getEntitlement: function () {
     return typeof entitlement === "string" ? entitlement : "free";
-  }, _doorFail: doorFail, _doorLineFor: doorLineFor, _demoLineFor: demoLineFor };
+  }, _doorFail: doorFail, _doorLineFor: doorLineFor, _demoLineFor: demoLineFor, getAccountAnchorMs: function () {
+    /* The session's free month anchor (app v51): the signed in
+       account's Auth creation stamp in milliseconds, or null when
+       the Auth record carried none. It comes from the Auth record
+       alone (accounts.js accountAnchorMs), never from the client
+       writable Firestore createdAt field, so no reader of this
+       value can be moved by the account owner. */
+    return typeof sessionAnchorMs === "number" ? sessionAnchorMs : null;
+  } };
   /* The door's credential code fence (app v33). It stands above
      the dormancy return (moved up in v42) so the door's error
      words resolve on any load and the suite can drive them
@@ -82,6 +90,7 @@
   var currentUser = null;
   var snapshot = null;        /* last synced documents for the signed in uid */
   var entitlement = "free";   /* this session's resolved entitlement */
+  var sessionAnchorMs = null; /* the signed in account's Auth creation stamp (app v51); null = the record carried none */
   var pushTimer = null, pushPending = false, adopting = false, deleting = false;
   /* The door page's held state (app v33): which step is showing and
      the email carried from step one to step two. Memory only: the
@@ -741,6 +750,78 @@
       }
     }
   };
+
+  /* ---------------- answer adjudication (app v51) ----------------
+     QA's build 13 retest (verdict 5ff194fe, Finding 2 STANDS
+     UNCURED on v50) sharpened the shape past v50's cure: the wedge
+     pends every Firestore request forever (the route held exactly
+     one, the Listen channel), yet the { source: "server" } gets
+     still RESOLVED, empty, out of the SDK's internal state — the
+     resolution completed into the fail soft signed in state at
+     about 19 seconds, the slowLoad line (wired only to the
+     timeout class in the catches below) never stood, and after
+     the heal nothing ever re-asked, so the planted data never
+     landed. A resolved empty answer reaches NO catch, so the
+     adjudication stands on the SUCCESS path, in the open: both
+     resolution pulls judge their resolved value through
+     A.adjudicatePull (accounts.js) before a single thing is
+     adopted or created from it. NOT LOADED means: render the
+     session from its local truth, stand the honest slowLoad
+     line at once (on the FIRST pull's answer, inside the first
+     sampling window, not after any retry delay), create nothing,
+     adopt nothing, and retry the WHOLE resolution pull on a
+     bounded interval until an adjudicated LOADED answer lands.
+     The pend and reject classes keep their v49/v50 fallbacks
+     exactly as they stand; this stands beside them for the class
+     they cannot see, the answer that lies. */
+  var NOT_LOADED_CODE = "mp/not-loaded";
+  function notLoadedError() { var e = new Error(NOT_LOADED_CODE); e.code = NOT_LOADED_CODE; return e; }
+  function isNotLoaded(e) { return !!e && e.code === NOT_LOADED_CODE; }
+  /* The adjudication's proof, from this device and this session:
+     the account's Auth creation stamp (never a client written
+     field) and whether this device already holds a per account
+     cache copy for the uid. */
+  function pullProof(user) {
+    var raw = storage.get(A.cacheKeyFor(user.uid));
+    var hasCache = false;
+    if (raw) { try { var c = JSON.parse(raw); hasCache = !!c && typeof c === "object" && !Array.isArray(c); } catch (e) {} }
+    return { authCreatedAtMs: A.accountAnchorMs(user), hasDeviceCache: hasCache, nowMs: Date.now() };
+  }
+  /* The retry: one timer at most, for one uid, re-running the
+     whole resolution (the same server source pull and the chain
+     behind it) every 15 seconds while the app stays open on this
+     session. It stops on sign out (onUser's signed out branch
+     clears it, and the fire time check names the uid it was armed
+     for), it never stacks (a second schedule for the same uid is
+     a no-op), and a LOADED answer simply never schedules another:
+     the chain that lands clears the line by rendering over it,
+     like every landing. */
+  var resolutionRetryTimer = null, resolutionRetryUid = null;
+  function stopResolutionRetry() {
+    if (resolutionRetryTimer) { clearTimeout(resolutionRetryTimer); resolutionRetryTimer = null; }
+    resolutionRetryUid = null;
+  }
+  function scheduleResolutionRetry(user) {
+    if (resolutionRetryTimer && resolutionRetryUid === user.uid) return;
+    stopResolutionRetry();
+    resolutionRetryUid = user.uid;
+    resolutionRetryTimer = setTimeout(function () {
+      resolutionRetryTimer = null;
+      var uid = resolutionRetryUid; resolutionRetryUid = null;
+      if (!currentUser || currentUser.uid !== uid || currentUser.isAnonymous) return;
+      resolveSignedIn(currentUser);
+    }, 15000);
+  }
+  /* The NOT LOADED landing, shared by both resolution roads: the
+     card renders from the session alone (its local truth — the
+     empty answer was adopted over NOTHING), the honest line
+     stands on it, and the retry is armed. */
+  function landNotLoaded(user) {
+    renderSignedIn(user, {});
+    slowLoadLine();
+    scheduleResolutionRetry(user);
+  }
+
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState !== "visible" || !currentUser || currentUser.isAnonymous || adopting || pushPending) return;
     var uid = currentUser.uid;
@@ -750,8 +831,14 @@
        the server (app v50, Finding 2's second shape): an answer
        out of the SDK's offline semantics here would be adopted
        over the working copy below, so this read must be the
-       server's truth or no answer at all. */
+       server's truth or no answer at all. And the answer is
+       adjudicated like the resolution's (app v51): the build 13
+       wedge resolves even a server source read EMPTY, and an
+       empty answer is never adopted over the working copy — the
+       refresh simply does not land, and the session keeps its
+       truth until a loaded answer exists. */
     WAIT.bound(storePromise.then(function (store) { return A.pullAccount(store, uid, { source: "server" }); }), 30000).then(function (docs) {
+      if (A.adjudicatePull(docs, pullProof(currentUser)) === "notLoaded") return;
       if (JSON.stringify(docs) !== JSON.stringify(snapshot)) {
         snapshot = docs;
         var pulledState = A.docsToState(docs).state;
@@ -860,6 +947,10 @@
   function onUser(user) {
     currentUser = user;
     if (!user) {
+      /* The adjudication retry dies with the session (app v51),
+         and the session anchor goes with it. */
+      stopResolutionRetry();
+      sessionAnchorMs = null;
       var notice = storage.get("mealPrepNotice");
       if (notice) storage.remove("mealPrepNotice");
       renderSignedOut(notice || "");
@@ -881,7 +972,26 @@
       return;
     }
     document.body.classList.remove("demoOn");
-    if (device.adoptedUid === user.uid && device.uid === user.uid) {
+    resolveSignedIn(user);
+  }
+
+  /* The sign in resolution, in its two roads. In app v51 the
+     roads stand as their own functions so the adjudication retry
+     can re-run the WHOLE resolution — the same server source
+     pull and the chain behind it — rather than a lighter re-read:
+     under the build 13 wedge the retry's reads resolve empty
+     while the channel is down and resolve real once it heals,
+     which is the only honest way to land. The dispatcher picks
+     the road by the device's adopted flag at run time, exactly
+     as onUser always has, and it takes the session's anchor from
+     the Auth record on every run. */
+  function resolveSignedIn(user) {
+    sessionAnchorMs = A.accountAnchorMs(user);
+    if (device.adoptedUid === user.uid && device.uid === user.uid) { resolveAdopted(user); return; }
+    resolveFirst(user);
+  }
+
+  function resolveAdopted(user) {
       /* Already adopted on this device: resolve the tier, refresh the
          card, and let the save hook carry changes from here. A
          profile that still carries no name runs the re-ask decision
@@ -903,8 +1013,22 @@
            that empty answer is what the person would have been
            shown. A server source read pends or refuses instead,
            so the bound above and its fallback own the shape and
-           account.slowLoad stands. */
+           account.slowLoad stands. (App v51: QA's build 13 retest
+           proved the server source read can also RESOLVE, empty,
+           out of the SDK's internal state while every network
+           request pends — the adjudication directly below now
+           judges that resolved answer before anything touches
+           it, and the bound keeps the classes it always owned.) */
         return A.pullAccount(store, user.uid, { source: "server" }).then(function (docs) {
+          /* The adjudication (app v51): the resolved value is
+             judged HERE, on the success path, before the heal,
+             the tier or the record read may touch it. An empty
+             answer for an account that is not provably new is
+             no answer: it is thrown to the terminal catch's NOT
+             LOADED branch, which stands the line on the first
+             pull and arms the retry — no catch wired only to a
+             timeout can ever see this class. */
+          if (A.adjudicatePull(docs, pullProof(user)) === "notLoaded") throw notLoadedError();
           if (docs.profile) return docs;
           /* No profile on the server for an adopted account (app
              v50, the Finding 1 heal): the pre-v50 deferred join
@@ -956,17 +1080,26 @@
             });
           }
         });
-      }), 30000).catch(function (e) { renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine(); });
-      return;
-    }
+      }), 30000).catch(function (e) {
+        if (isNotLoaded(e)) { landNotLoaded(user); return; }
+        renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine();
+      });
+  }
+
+  function resolveFirst(user) {
     /* First sign in of this account on this device. The chain
        races the same 30 second bound as the adopted road above
        (app v49, U5), with the same fallback and the same line. */
     WAIT.bound(storePromise.then(function (store) {
       /* The server source again (app v50, Finding 2): a signup
          decision made on an offline empty answer would create a
-         blank profile over a real account. */
+         blank profile over a real account. (App v51: the answer
+         is adjudicated below before the signup decision is made
+         from it at all — the build 13 wedge resolves the server
+         source read empty, and createProfile never fires off an
+         unadjudicated answer.) */
       return A.pullAccount(store, user.uid, { source: "server" }).then(function (docs) {
+        if (A.adjudicatePull(docs, pullProof(user)) === "notLoaded") throw notLoadedError();
         var pot = liveState();
         var gate = A.importGate({ profile: docs.profile, potState: pot, docs: docs, deviceConsumed: device.guestPotConsumed });
         var isSignup = !docs.profile;
@@ -1017,7 +1150,10 @@
         adopt(user, docs);
         return dailyStamps(user, false);
       });
-    }), 30000).catch(function (e) { renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine(); });
+    }), 30000).catch(function (e) {
+      if (isNotLoaded(e)) { landNotLoaded(user); return; }
+      renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine();
+    });
   }
 
   /* After an adoption reload with an import waiting, re-offer it. */
