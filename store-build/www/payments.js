@@ -155,6 +155,14 @@
     return enabled() ? opinion : null;
   }
 
+  /* U7 (app v49): the bridge waits below race the shared 60
+     second bound (MP_WAIT, defined in auth.js, which loads
+     before this file). A store sheet or a brain read that never
+     answers used to pend its caller forever; the timeout now
+     reaches each entry point's own settle handling, in the
+     seam's own answer shapes. */
+  function boundWait(promise, ms) { return global.MP_WAIT.bound(promise, ms); }
+
   /* Refresh the opinion from the provider, and hand the provider
      the account it is reading for (the sign-in path passes the
      uid; the app user id in the brain is that same id). Disabled:
@@ -163,12 +171,14 @@
      Plus entitlement is active, "free" when the provider answered
      and it is not. A dormant answer (no bridge where this copy
      runs) and a failed read both keep the last opinion (fail
-     quiet: a blip never locks a paying user out mid-session). */
+     quiet: a blip never locks a paying user out mid-session).
+     The read itself is bounded (app v49): a read that never
+     answers lands in the same keep-the-last-opinion catch. */
   function refresh(uid) {
     if (typeof uid === "string" && uid !== "") appUserId = uid;
     if (!enabled()) { opinion = null; return Promise.resolve(null); }
     installNative();
-    return provider.getCustomerInfo().then(function (info) {
+    return boundWait(provider.getCustomerInfo(), 60000).then(function (info) {
       if (info && info.dormant) return opinion;
       var active = (info && info.entitlements && info.entitlements.active) || {};
       opinion = active[PLUS_ENTITLEMENT] ? "pro" : "free";
@@ -187,18 +197,30 @@
     if (!enabled()) return Promise.resolve({ dormant: true });
     installNative();
     var productId = period === "year" ? cfg.products.plusYearly : cfg.products.plusMonthly;
-    return provider.purchasePackage({ productId: productId, want: want || null }).then(function (r) {
+    /* The purchase races the 60 second sheet bound (app v49):
+       a timeout answers { timeout: true }, a value in the seam's
+       own shape, so its callers show the honest slow line and
+       never a fake success. */
+    return boundWait(provider.purchasePackage({ productId: productId, want: want || null }), 60000).then(function (r) {
       if (r && (r.dormant || r.cancelled || r.error)) return r;
       return refresh().then(function () { return { purchased: opinion === "pro" }; });
+    }, function (e) {
+      if (global.MP_WAIT.isTimeout(e)) return { timeout: true };
+      throw e;
     });
   }
 
   function restore() {
     if (!enabled()) return Promise.resolve({ dormant: true });
     installNative();
-    return provider.restorePurchases().then(function (r) {
+    /* The restore races the same 60 second bound (app v49) and
+       answers { timeout: true } the same way. */
+    return boundWait(provider.restorePurchases(), 60000).then(function (r) {
       if (r && r.dormant) return r;
       return refresh();
+    }, function (e) {
+      if (global.MP_WAIT.isTimeout(e)) return { timeout: true };
+      throw e;
     });
   }
 

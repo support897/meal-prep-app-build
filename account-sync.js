@@ -67,6 +67,16 @@
   function toast(msg) { var t = document.getElementById("toast"); if (t) { t.textContent = msg; t.classList.remove("hidden"); setTimeout(function () { t.classList.add("hidden"); }, 3200); } }
 
   var provider = window.MP_AUTH.useFirebase(cfg);
+  /* The shared bounding helper (app v49): auth.js loads before
+     this file and stands it on the global as MP_WAIT. Every cure
+     below races through it; no bound is copied or re-invented
+     here. */
+  var WAIT = window.MP_WAIT;
+  /* The boot watchdog's held state (app v49, U1): whether the
+     first auth answer has landed, whether the watchdog had to
+     land the door itself, and whether the person took the guest
+     exit from that watchdog door. */
+  var authAnswered = false, watchdogLanded = false, preAnswerGuestExit = false;
   var storePromise = provider.store();
   var device = A.readDevice(storage);
   var currentUser = null;
@@ -179,6 +189,28 @@
     var b = document.getElementById("doorBody");
     if (b) b.innerHTML = "";
   }
+  /* U3's door half (app v49): a tapped social door carries a
+     quiet pending mark (the isPending class, the busy attribute
+     and the one moment line) while its sheet is awaited, and a
+     second tap on the SAME pending door starts nothing new.
+     Every other control stays live throughout: the door never
+     locks. The mark clears on any settle: success hands over to
+     onUser, and a failure, the 60 second sheet bound included,
+     lands in doorFail exactly as it always has. */
+  var doorPending = { google: false, apple: false };
+  function doorSocial(kind, btn) {
+    if (doorPending[kind]) return;
+    doorPending[kind] = true;
+    btn.classList.add("isPending");
+    btn.setAttribute("aria-busy", "true");
+    doorMsg(t("door.oneMoment"));
+    var call = kind === "google" ? window.MP_AUTH.signInGoogle() : window.MP_AUTH.signInApple();
+    call.then(function () { /* onUser takes over */ }, doorFail).then(function () {
+      doorPending[kind] = false;
+      btn.classList.remove("isPending");
+      btn.removeAttribute("aria-busy");
+    });
+  }
   function renderDoorStep1() {
     doorStep = 1;
     var b = document.getElementById("doorBody");
@@ -200,8 +232,8 @@
       "<button class='doorFootLine' id='doorGuestLine'>" + t("door.guestLine") + "</button>" +
       "</div>" +
       "<div id='doorDemoBlock'></div>";
-    document.getElementById("doorGoogle").addEventListener("click", function () { window.MP_AUTH.signInGoogle().catch(doorFail); });
-    document.getElementById("doorApple").addEventListener("click", function () { window.MP_AUTH.signInApple().catch(doorFail); });
+    document.getElementById("doorGoogle").addEventListener("click", function () { doorSocial("google", this); });
+    document.getElementById("doorApple").addEventListener("click", function () { doorSocial("apple", this); });
     var input = document.getElementById("doorEmail");
     if (doorEmail) input.value = doorEmail;
     function goNext() {
@@ -213,7 +245,14 @@
     }
     document.getElementById("doorNext").addEventListener("click", goNext);
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); goNext(); } });
-    document.getElementById("doorGuestLine").addEventListener("click", function () { hideDoorPage(); });
+    document.getElementById("doorGuestLine").addEventListener("click", function () {
+      /* A guest exit taken while the boot watchdog's door stands
+         (before the first auth answer) is remembered, so the late
+         signed out answer does not land the door again over a
+         person who already chose the guest road (app v49, U1). */
+      if (watchdogLanded && !authAnswered) preAnswerGuestExit = true;
+      hideDoorPage();
+    });
     document.getElementById("doorDemoLine").addEventListener("click", function () { renderDoorDemo(); });
   }
   function renderDoorStep2() {
@@ -440,7 +479,7 @@
     var user = currentUser;
     if (!user || user.isAnonymous || device.demo) return Promise.resolve();
     if (device.pendingJoinUid === user.uid) {
-      return storePromise.then(function (store) {
+      return reloadOnTimeout(storePromise.then(function (store) {
         return A.pullAccount(store, user.uid).then(function (docs) {
           var pot = liveState();
           var gate = A.importGate({ profile: docs.profile, potState: pot, docs: docs, deviceConsumed: device.guestPotConsumed });
@@ -470,7 +509,7 @@
             return dailyStamps(user, true);
           }).then(function () { location.reload(); });
         });
-      }).catch(function () {});
+      }).catch(function () {}));
     }
     saveName(user, nm);
     renderSignedIn(user, {});
@@ -622,7 +661,7 @@
        demo.notOn. A typed code always earns the real check, whatever
        the shipped slot holds. */
     if (!hash) return Promise.reject(new Error(t("demo.notOn")));
-    return demoUnlock(hash).then(function (res) {
+    return reloadOnTimeout(demoUnlock(hash).then(function (res) {
       if (res.outcome === "nomatch") throw new Error(t("demo.codeNoMatch"));
       if (res.outcome !== "match") throw new Error(t("demo.codeUnreachable"));
       var st = demoState();
@@ -633,7 +672,7 @@
         device.demo = true; device.demoUid = res.user.uid; device.uid = null; saveDevice();
         location.reload();
       });
-    });
+    }));
   }
   /* The code forms' one shared path (app v35): both the Account card
      form and the door page form hash what was typed and hand it to
@@ -732,7 +771,10 @@
     if (document.visibilityState !== "visible" || !currentUser || currentUser.isAnonymous || adopting || pushPending) return;
     if (device.pendingJoinUid && device.pendingJoinUid === currentUser.uid) return;
     var uid = currentUser.uid;
-    storePromise.then(function (store) { return A.pullAccount(store, uid); }).then(function (docs) {
+    /* The refresh pull races the same 30 second bound (app v49,
+       U5): a hang lands in the rejection handler beside it and
+       the session simply keeps its working copy. */
+    WAIT.bound(storePromise.then(function (store) { return A.pullAccount(store, uid); }), 30000).then(function (docs) {
       if (JSON.stringify(docs) !== JSON.stringify(snapshot)) {
         snapshot = docs;
         var pulledState = A.docsToState(docs).state;
@@ -795,24 +837,33 @@
       device.uid = user.uid; device.adoptedUid = user.uid; device.pendingImportUid = user.uid; saveDevice();
       var startBlank = blankState();
       startBlank.accountName = acctName;
-      return A.pushAccount(store, user.uid, startBlank, null, nowIso()).then(function (created) {
+      return reloadOnTimeout(A.pushAccount(store, user.uid, startBlank, null, nowIso()).then(function (created) {
         snapshot = created;
         /* The account starts empty on screen too: the pot waits
            in the guest cache, one tap from the Account card. */
         setLive(startBlank);
         storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startBlank));
         return dailyStamps(user, true);
-      }).then(function () { location.reload(); });
+      }).then(function () { location.reload(); }));
     }
     var startState = blankState();
     startState.accountName = acctName;
-    return A.pushAccount(store, user.uid, startState, null, nowIso()).then(function (created) {
+    return reloadOnTimeout(A.pushAccount(store, user.uid, startState, null, nowIso()).then(function (created) {
       snapshot = created;
       storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startState));
       setLive(startState);
       device.uid = user.uid; device.adoptedUid = user.uid; saveDevice();
       return dailyStamps(user, true);
-    }).then(function () { location.reload(); });
+    }).then(function () { location.reload(); }));
+  }
+
+  /* U5's honest line (app v49): when the resolution chain's
+     bound fires, the terminal catch renders its usual fallback
+     first, and this line lands on the Account card's own message
+     line, which that render has just built. */
+  function slowLoadLine() {
+    var m = document.getElementById("accMsg2");
+    if (m) m.textContent = t("account.slowLoad");
   }
 
   function onUser(user) {
@@ -845,7 +896,13 @@
          profile that still carries no name runs the re-ask decision
          (the tour's name stop, or one quiet re-offer on a later
          visit, then never again). */
-      storePromise.then(function (store) {
+      /* U5 (app v49): the whole resolution chain (the pull, the
+         tier, the record read) races a 30 second bound through
+         the shared helper. Its catches below fire on rejection
+         only, never on duration; on a timeout the terminal catch
+         takes exactly its usual fallback and adds the honest
+         slow line. */
+      WAIT.bound(storePromise.then(function (store) {
         var pulledDocs = null;
         return A.pullAccount(store, user.uid).then(function (docs) {
           snapshot = docs;
@@ -892,11 +949,13 @@
             });
           }
         });
-      }).catch(function () { renderSignedIn(user, {}); });
+      }), 30000).catch(function (e) { renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine(); });
       return;
     }
-    /* First sign in of this account on this device. */
-    storePromise.then(function (store) {
+    /* First sign in of this account on this device. The chain
+       races the same 30 second bound as the adopted road above
+       (app v49, U5), with the same fallback and the same line. */
+    WAIT.bound(storePromise.then(function (store) {
       return A.pullAccount(store, user.uid).then(function (docs) {
         var pot = liveState();
         var gate = A.importGate({ profile: docs.profile, potState: pot, docs: docs, deviceConsumed: device.guestPotConsumed });
@@ -925,13 +984,16 @@
         adopt(user, docs);
         return dailyStamps(user, false);
       });
-    }).catch(function () { renderSignedIn(user, {}); });
+    }), 30000).catch(function (e) { renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine(); });
   }
 
   /* After an adoption reload with an import waiting, re-offer it. */
   function maybeOfferImport(user) {
     if (!user || user.isAnonymous || device.pendingImportUid !== user.uid) return;
-    storePromise.then(function (store) {
+    /* The same 30 second bound as the resolution path (app v49,
+       U5): a pull that never answers lands in the swallow catch
+       below, exactly as a refused one does. */
+    WAIT.bound(storePromise.then(function (store) {
       return A.pullAccount(store, user.uid).then(function (docs) {
         var potRaw = storage.get(A.guestCacheKey());
         var pot = null;
@@ -946,7 +1008,36 @@
           device.pendingImportUid = null; saveDevice();
         }
       });
-    }).catch(function () {});
+    }), 30000).catch(function () {});
+  }
+
+  /* U6 (app v49): the reload gated chains race a 30 second
+     bound. Local state is already consistent when these chains
+     run (the device record and the live copy are written before
+     the push they wait on), so a chain that never answers reloads
+     anyway and the sign in resolution on the other side reads
+     the truth. Any other rejection keeps the behaviour it always
+     had: the bound adds duration handling beside the settle
+     handling, never instead of it. */
+  function reloadOnTimeout(promise) {
+    return WAIT.bound(promise, 30000).then(function (v) { return v; }, function (e) {
+      if (WAIT.isTimeout(e)) { location.reload(); return undefined; }
+      throw e;
+    });
+  }
+  /* Sign out is the one reload gated chain that does NOT reload
+     on a timeout (app v49, U6): the person is told, on the
+     Account card's own message line, and the session stands
+     exactly as it stands. */
+  function boundSignOut(promise) {
+    return WAIT.bound(promise, 30000).then(function () {}, function (e) {
+      if (WAIT.isTimeout(e)) {
+        var m = document.getElementById("accMsg2");
+        if (m) m.textContent = t("account.slowSignOut");
+        return;
+      }
+      throw e;
+    });
   }
 
   function signOutFlow() {
@@ -960,7 +1051,7 @@
       var guestRaw = storage.get(A.guestCacheKey());
       if (guestRaw && !device.guestPotConsumed) setLive(JSON.parse(guestRaw)); else setLive(blankState());
       device.demo = false; device.demoUid = null; saveDevice();
-      return finish();
+      return boundSignOut(finish());
     }
     var raw = storage.get(A.LIVE_KEY);
     if (raw) storage.set(A.cacheKeyFor(user.uid), raw);
@@ -968,13 +1059,13 @@
     /* A pending join signs out without any push: there is no profile
        to push to yet, and signing in again re-runs the join. */
     var push = (st && device.pendingJoinUid !== user.uid) ? storePromise.then(function (store) { return A.pushAccount(store, user.uid, st, snapshot, nowIso()); }) : Promise.resolve();
-    return push.then(function () {}, function () {}).then(function () {
+    return boundSignOut(push.then(function () {}, function () {}).then(function () {
       var guestRaw2 = storage.get(A.guestCacheKey());
       if (guestRaw2 && !device.guestPotConsumed) { try { setLive(JSON.parse(guestRaw2)); } catch (e) { setLive(blankState()); } }
       else setLive(blankState());
       device.uid = null; device.adoptedUid = null; device.pendingImportUid = null; device.pendingJoinUid = null; saveDevice();
       return finish();
-    });
+    }));
   }
 
   /* The tour's last stop offer (design section 2): one soft door at
@@ -990,7 +1081,32 @@
     }
   });
 
+  /* U1, the boot watchdog (app v49): the first auth answer rides
+     the SDK load and the provider's subscription, and a load that
+     stalls used to leave the boot on its first paint forever, the
+     door never shown at all. If no first answer has landed within
+     15 seconds of the listener registering, the door lands anyway,
+     in its signed out shape, with the honest slow line, and every
+     road on it stays live: the guest exit works (and is remembered,
+     below), the social doors run under their own bounds, and the
+     email walk runs. A late answer still resolves the session
+     normally: onUser re-renders over the watchdog's landing and
+     the line goes with the old door. */
+  var doorWatchdog = setTimeout(function () {
+    if (authAnswered) return;
+    watchdogLanded = true;
+    var notice = storage.get("mealPrepNotice");
+    if (notice) { onUser(null); return; }
+    renderSignedOut("");
+    showDoorPage();
+    doorMsg(" " + t("door.slowSignin"));
+  }, 15000);
   window.MP_AUTH.onChange(function (user) {
+    if (!authAnswered) { authAnswered = true; clearTimeout(doorWatchdog); }
+    /* A guest exit taken from the watchdog's door stands: the late
+       signed out answer refreshes the card behind the app instead
+       of landing the door again. */
+    if (!user && watchdogLanded && preAnswerGuestExit) { renderSignedOut(""); return; }
     onUser(user);
     if (user && !user.isAnonymous) maybeOfferImport(user);
   });

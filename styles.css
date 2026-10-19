@@ -318,6 +318,10 @@ body[data-photo-mode="dark"] #bgVeil { background: #241812; opacity: 0.89; }
 .doorSocial { display: flex; gap: 12px; justify-content: center; margin-bottom: 18px; }
 .doorIconBtn { width: 68px; height: 54px; border-radius: 14px; border: 1px solid var(--inputline); background: var(--card); display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .doorIconBtn svg { display: block; }
+/* The pending mark (app v49): a tapped door or buy button waiting
+   on its sheet dims quietly while it waits. Nothing else on the
+   surface changes, and every other control stays live. */
+.doorIconBtn.isPending, .primaryBtn.isPending, .linkBtn.isPending { opacity: .45; }
 .doorDivider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; font-weight: 600; margin: 2px 0 16px; }
 .doorDivider::before, .doorDivider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
 .doorField { text-align: left; margin-bottom: 14px; }

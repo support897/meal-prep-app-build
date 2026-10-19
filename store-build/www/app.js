@@ -291,7 +291,10 @@
   $("upgradeTry").addEventListener("click", function () {
     const w = upgradeWant; $("upgradeModal").classList.add("hidden"); upgradeWant = null; if (w) showGateLine(w);
     const P = window.MP_PAYMENTS;
-    if (P && typeof P.tryPlus === "function" && P.enabled()) { P.tryPlus(w).then(function (r) { if (r && r.dormant) goPlans(); }); }
+    /* The popup road consumes its answer too (app v49, U7): a
+       dormant answer, and now a timed out one, land on the Plans
+       card, the honest surface for both. */
+    if (P && typeof P.tryPlus === "function" && P.enabled()) { P.tryPlus(w).then(function (r) { if (r && (r.dormant || r.timeout)) goPlans(); }); }
     else goPlans();
   });
 
@@ -318,6 +321,47 @@
      the restore line, in the same quiet voices: the renewal
      disclosure (the three truths, prices riding the table tokens)
      and the links row, Privacy Policy and Terms of Use. */
+  /* U7's consumption (app v49): the buy and restore taps CONSUME
+     the seam's answers, which used to be discarded whole. The
+     tapped button carries the quiet isPending mark while its
+     sheet is awaited, a second tap on the same pending button
+     starts nothing new, and every answer the seam shapes lands
+     as one quiet line in the box: done, cancelled (nothing was
+     charged), the seam's own error words, dormant (the honest
+     not switched on line), a restore found or not found or not
+     readable, and the 60 second bound's timeout. Nothing here
+     ever claims a success the seam did not report. */
+  const plansBuyPending = { month: false, year: false, restore: false };
+  function plansBuyMsg(text) { const m = $("plansBuyMsg"); if (m) m.textContent = text || ""; }
+  function plansBuyTap(kind, btn) {
+    if (plansBuyPending[kind]) return;
+    plansBuyPending[kind] = true;
+    btn.classList.add("isPending");
+    plansBuyMsg("");
+    const clear = function () { plansBuyPending[kind] = false; btn.classList.remove("isPending"); };
+    const P = window.MP_PAYMENTS;
+    if (kind === "restore") {
+      P.restore().then(function (r) {
+        clear();
+        if (r && r.timeout) plansBuyMsg(t("plans.buySlow"));
+        else if (r && r.dormant) plansBuyMsg(t("plans.buyDormant"));
+        else if (r === "pro") plansBuyMsg(t("plans.restoreFound"));
+        else if (r === "free") plansBuyMsg(t("plans.restoreNone"));
+        else plansBuyMsg(t("plans.restoreUnknown"));
+      }, function () { clear(); plansBuyMsg(t("plans.buyFailed")); });
+      return;
+    }
+    P.tryPlus(null, kind).then(function (r) {
+      clear();
+      if (r && r.purchased) plansBuyMsg(t("plans.buyDone"));
+      else if (r && r.cancelled) plansBuyMsg(t("plans.buyCancelled"));
+      else if (r && r.timeout) plansBuyMsg(t("plans.buySlow"));
+      else if (r && r.dormant) plansBuyMsg(t("plans.buyDormant"));
+      else if (r && r.error) plansBuyMsg(String(r.error));
+      else plansBuyMsg(t("plans.buyFailed"));
+    }, function () { clear(); plansBuyMsg(t("plans.buyFailed")); });
+  }
+
   /* Apple's standard EULA: the Terms of Use target, named once. */
   const PLANS_TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
   function renderPlansBuy() {
@@ -337,14 +381,15 @@
       "<div class='row'><button class='primaryBtn' id='buyPlusMonthly'>" + t("plans.buyMonthly") + "</button>" +
       "<button class='primaryBtn' id='buyPlusYearly'>" + t("plans.buyYearly") + "</button></div>" +
       "<div class='row'><button class='linkBtn' id='restorePurchase'>" + t("plans.restore") + "</button></div>" +
+      "<p class='hint' id='plansBuyMsg'></p>" +
       "<p class='hint'>" + t("plans.disclosure") + "</p>" +
       "<div class='row'>" +
       (privHref ? "<a class='linkBtn' id='plansPrivacyLink' href='" + privHref + "' target='_blank' rel='noopener'>" + t("data.privacy") + "</a>" : "") +
       "<a class='linkBtn' id='plansTermsLink' href='" + PLANS_TERMS_URL + "' target='_blank' rel='noopener'>" + t("plans.terms") + "</a></div>";
     card.appendChild(box);
-    box.querySelector("#buyPlusMonthly").addEventListener("click", function () { P.tryPlus(null, "month"); });
-    box.querySelector("#buyPlusYearly").addEventListener("click", function () { P.tryPlus(null, "year"); });
-    box.querySelector("#restorePurchase").addEventListener("click", function () { P.restore(); });
+    box.querySelector("#buyPlusMonthly").addEventListener("click", function () { plansBuyTap("month", this); });
+    box.querySelector("#buyPlusYearly").addEventListener("click", function () { plansBuyTap("year", this); });
+    box.querySelector("#restorePurchase").addEventListener("click", function () { plansBuyTap("restore", this); });
   }
 
   function expiringNames() {
@@ -957,15 +1002,22 @@
     $("photoResults").innerHTML = "<p class='hint'>" + t("photo.looking") + "</p>";
     const found = [];
     try {
-      if (!window.cocoSsd) {
-        await loadScript("vendor/tf.min.js");
-        await loadScript("vendor/coco-ssd.min.js");
-      }
-      const model = await cocoSsd.load({ modelUrl: "vendor/model/model.json" });
-      const img = $("photoPreview").querySelector("img");
-      const preds = await model.detect(img);
-      const map = { apple: "apple", banana: "banana", orange: "orange", broccoli: "broccoli", carrot: "carrot", pizza: "pizza", cake: "cake", sandwich: "sandwich", donut: "donut" };
-      preds.forEach(function (p) { if (map[p.class] && found.indexOf(map[p.class]) === -1) found.push(map[p.class]); });
+      /* U8 (app v49): the model load races a 30 second bound. A
+         load that never settles used to hold the looking line
+         forever; the timeout now falls into the same catch a
+         failed load has always taken, and the tap to confirm
+         fallback below lands exactly as it does for a refusal. */
+      await window.MP_WAIT.bound((async function () {
+        if (!window.cocoSsd) {
+          await loadScript("vendor/tf.min.js");
+          await loadScript("vendor/coco-ssd.min.js");
+        }
+        const model = await cocoSsd.load({ modelUrl: "vendor/model/model.json" });
+        const img = $("photoPreview").querySelector("img");
+        const preds = await model.detect(img);
+        const map = { apple: "apple", banana: "banana", orange: "orange", broccoli: "broccoli", carrot: "carrot", pizza: "pizza", cake: "cake", sandwich: "sandwich", donut: "donut" };
+        preds.forEach(function (p) { if (map[p.class] && found.indexOf(map[p.class]) === -1) found.push(map[p.class]); });
+      })(), 30000);
     } catch (e) { /* local model could not load: fall back to tap to confirm list */ }
     let html = "";
     if (found.length) html += "<h3>" + t("photo.foundTitle") + "</h3><p class='hint'>" + t("photo.foundHint") + "</p>" + found.map(detectRow).join("");
@@ -1003,15 +1055,20 @@
     $("calResults").innerHTML = "<p class='hint'>" + t("photo.looking") + "</p>";
     const found = [];
     try {
-      if (!window.cocoSsd) {
-        await loadScript("vendor/tf.min.js");
-        await loadScript("vendor/coco-ssd.min.js");
-      }
-      const model = await cocoSsd.load({ modelUrl: "vendor/model/model.json" });
-      const img = $("calPhotoPreview").querySelector("img");
-      const preds = await model.detect(img);
-      const map = { apple: "apple", banana: "banana", orange: "orange", broccoli: "broccoli", carrot: "carrot", pizza: "pizza", cake: "cake", sandwich: "sandwich", donut: "donut" };
-      preds.forEach(function (p) { if (map[p.class] && found.indexOf(map[p.class]) === -1) found.push(map[p.class]); });
+      /* U8 (app v49): the same 30 second bound as the fridge
+         photo beside it; the timeout takes this handler's own
+         existing fallback, the tap to add list below. */
+      await window.MP_WAIT.bound((async function () {
+        if (!window.cocoSsd) {
+          await loadScript("vendor/tf.min.js");
+          await loadScript("vendor/coco-ssd.min.js");
+        }
+        const model = await cocoSsd.load({ modelUrl: "vendor/model/model.json" });
+        const img = $("calPhotoPreview").querySelector("img");
+        const preds = await model.detect(img);
+        const map = { apple: "apple", banana: "banana", orange: "orange", broccoli: "broccoli", carrot: "carrot", pizza: "pizza", cake: "cake", sandwich: "sandwich", donut: "donut" };
+        preds.forEach(function (p) { if (map[p.class] && found.indexOf(map[p.class]) === -1) found.push(map[p.class]); });
+      })(), 30000);
     } catch (e) { /* local model could not load: the tap to add list below still works */ }
     if (found.length) {
       $("calResults").innerHTML = "<h3>" + t("photo.foundTitle") + "</h3>" + found.map(function (c) { return calRow(L.photoKcal(c, NUT)); }).join("");
@@ -1410,6 +1467,13 @@
     const plug = nativeNotifPlugin(); if (!plug) return;
     if (notifReschedBusy) return;
     notifReschedBusy = true;
+    /* U9 (app v49): a plugin call that never settles never
+       reaches the finally below, and the busy flag used to stay
+       set for the whole session, so the reminders silently
+       stopped re-booking. The flag now clears itself on a 30
+       second timer whatever the pass does; a pass that settles
+       clears its own timer in the finally, exactly as before. */
+    const busyWatchdog = setTimeout(function () { notifReschedBusy = false; }, 30000);
     try {
       const pending = await plug.getPending();
       const stale = ((pending && pending.notifications) || []).filter(function (n) { return n.id !== NOTIF_TEST_ID; });
@@ -1430,7 +1494,7 @@
         if (list.length) await plug.schedule({ notifications: list });
       }
     } catch (err) { /* The OS schedule is best effort: the in-app Coming up list still stands, and the next save rebuilds. */ }
-    finally { notifReschedBusy = false; }
+    finally { clearTimeout(busyWatchdog); notifReschedBusy = false; }
   }
   function queueNotifReschedule() {
     if (!nativeNotifPlugin()) return;

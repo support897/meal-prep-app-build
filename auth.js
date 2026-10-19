@@ -28,6 +28,49 @@
     return Promise.reject(new Error("sign in is not switched on"));
   }
 
+  /* ----------------------------------------------------------------
+     The one bounding helper (app v49, the fleet wait census cures).
+     Every wait that used to pend forever now races through
+     boundWait: a promise that has not settled inside its bound
+     rejects with the timeout error below, and every rejection path
+     the call already owned receives it unchanged, so a wait that
+     runs long lands exactly where a refusal always landed. The
+     error's code (mp/timeout) is an internal marker only: no
+     surface ever prints it (the door's fence and every other line
+     map it like the network failure it stands beside). The helper
+     is shared, never copied: this file loads before payments.js,
+     app.js and account-sync.js, and each of them reads it off the
+     global as MP_WAIT. */
+  function timeoutError() {
+    var e = new Error("the wait timed out");
+    e.code = "mp/timeout";
+    e.timeout = true;
+    return e;
+  }
+  function isTimeout(e) { return !!(e && (e.code === "mp/timeout" || e.timeout === true)); }
+  function boundWait(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        reject(timeoutError());
+      }, ms);
+      Promise.resolve(promise).then(function (v) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(v);
+      }, function (err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  }
+  global.MP_WAIT = { bound: boundWait, isTimeout: isTimeout, TIMEOUT_CODE: "mp/timeout" };
+
   var MP_AUTH = {
     DOORS: DOORS,
     /* Tests and the browser glue install the provider here. */
@@ -94,7 +137,7 @@
   var sdkPromise = null;
   function loadSdk() {
     if (sdkPromise) return sdkPromise;
-    sdkPromise = new Promise(function (resolve, reject) {
+    var attempt = new Promise(function (resolve, reject) {
       if (global.firebase && global.firebase.auth && global.firebase.firestore) { resolve(global.firebase); return; }
       var base = "vendor-firebase/";
       var files = ["firebase-app-compat.js", "firebase-auth-compat.js", "firebase-firestore-compat.js"];
@@ -104,14 +147,27 @@
           if (global.firebase) resolve(global.firebase); else reject(new Error("firebase sdk did not load"));
           return;
         }
-        var s = global.document.createElement("script");
-        s.src = base + files[i++];
-        s.onload = next;
-        s.onerror = function () { reject(new Error("firebase sdk failed to load: " + s.src)); };
-        global.document.head.appendChild(s);
+        var fileLoaded = new Promise(function (res, rej) {
+          var s = global.document.createElement("script");
+          s.src = base + files[i++];
+          s.onload = res;
+          s.onerror = function () { rej(new Error("firebase sdk failed to load: " + s.src)); };
+          global.document.head.appendChild(s);
+        });
+        /* U2a (app v49): a script tag that neither loads nor errors
+           used to pend this promise, and with it every door,
+           forever. Each file now races a 20 second bound through
+           the shared helper, and the timeout reaches the load's
+           own rejection below like any failed load. */
+        boundWait(fileLoaded, 20000).then(next, reject);
       }
       next();
     });
+    /* U2b (app v49): a rejected load used to stay cached, so one
+       failure bricked sign in until a reload. The cached promise
+       clears itself on rejection and the next call retries the
+       load; a load that succeeded stays cached as before. */
+    sdkPromise = attempt.then(function (fb) { return fb; }, function (e) { sdkPromise = null; throw e; });
     return sdkPromise;
   }
 
@@ -181,10 +237,29 @@
   MP_AUTH._makeSwapTs = makeSwapTs;
 
   function firebaseProvider(config) {
-    var appPromise = loadSdk().then(function (fb) {
-      var app = fb.apps && fb.apps.length ? fb.app() : fb.initializeApp({ apiKey: config.apiKey, authDomain: config.authDomain, projectId: config.projectId });
-      return { fb: fb, app: app, auth: fb.auth(), db: fb.firestore() };
-    });
+    /* U2b, the provider half (app v49): the SDK context is derived
+       through ensureApp, and a rejected derivation clears itself
+       exactly like the loader does, so the next door tap or store
+       call retries the whole road instead of meeting the same dead
+       promise. Listener attempts that arrived while the road was
+       down are retried the moment a derivation succeeds (see
+       onChange), so a sign in completed after a recovered load
+       still reaches the app. */
+    var appPromise = null;
+    var waitingListeners = [];
+    function ensureApp() {
+      if (appPromise) return appPromise;
+      appPromise = loadSdk().then(function (fb) {
+        var app = fb.apps && fb.apps.length ? fb.app() : fb.initializeApp({ apiKey: config.apiKey, authDomain: config.authDomain, projectId: config.projectId });
+        return { fb: fb, app: app, auth: fb.auth(), db: fb.firestore() };
+      });
+      appPromise.then(function () {
+        var waiting = waitingListeners;
+        waitingListeners = [];
+        waiting.forEach(function (attempt) { attempt(); });
+      }, function () { appPromise = null; });
+      return appPromise;
+    }
     /* Firestore offline persistence stays OFF (design section 5): the
        app's own per account localStorage cache is the offline layer,
        so the library's second cache is never enabled here. */
@@ -194,14 +269,25 @@
        no id token is a failed door, never a silent pass: it throws,
        and the caller's chain rejects like any popup error. */
     function googleCredential(ctx, plug) {
-      return plug.signInWithGoogle().then(function (result) {
+      /* U3 (app v49): the native sheet is the OS's own surface and
+         earns the long bound, 60 seconds. A sheet that never
+         answers used to pend the door forever: the fleet census's
+         hung door class, present here. The timeout rejects down
+         the same chain a plugin error takes, to doorFail, and the
+         door re-arms (account-sync.js clears its pending mark on
+         any settle, this one included). Every caller of this
+         helper (the doors and the deletion re-checks) inherits
+         the bound. */
+      return boundWait(plug.signInWithGoogle(), 60000).then(function (result) {
         var idToken = result && result.credential && result.credential.idToken;
         if (!idToken) throw new Error("sign in did not finish");
         return ctx.fb.auth.GoogleAuthProvider.credential(idToken);
       });
     }
     function appleCredential(ctx, plug) {
-      return plug.signInWithApple({ skipNativeAuth: true }).then(function (result) {
+      /* U3 (app v49): the same 60 second sheet bound as the
+         Google door beside it. */
+      return boundWait(plug.signInWithApple({ skipNativeAuth: true }), 60000).then(function (result) {
         var cred = (result && result.credential) || {};
         if (!cred.idToken) throw new Error("sign in did not finish");
         var provider = new ctx.fb.auth.OAuthProvider("apple.com");
@@ -210,50 +296,69 @@
     }
     var p = {
       currentUser: null,
-      ready: appPromise,
+      ready: ensureApp(),
       onChange: function (cb) {
         var unsub = function () {};
-        appPromise.then(function (ctx) {
-          unsub = ctx.auth.onAuthStateChanged(function (u) { p.currentUser = normUser(u); cb(p.currentUser); });
-        });
-        return function () { unsub(); };
+        var stopped = false;
+        function attempt() {
+          ensureApp().then(function (ctx) {
+            if (stopped) return;
+            unsub = ctx.auth.onAuthStateChanged(function (u) { p.currentUser = normUser(u); cb(p.currentUser); });
+          }, function () {
+            /* The load is down (its own bound already spoke
+               through the doors that retried it). Stay waiting:
+               ensureApp re-runs this attempt when a later
+               derivation succeeds, and the boot watchdog in
+               account-sync.js owns the surface meanwhile. */
+            waitingListeners.push(attempt);
+          });
+        }
+        attempt();
+        return function () { stopped = true; unsub(); };
       },
       signInGoogle: function () {
         var plug = nativeAuthPlugin();
         if (plug) {
-          return appPromise.then(function (ctx) { return googleCredential(ctx, plug).then(function (cred) { return ctx.auth.signInWithCredential(cred); }); }).then(function (r) { return normUser(r.user); });
+          return ensureApp().then(function (ctx) { return googleCredential(ctx, plug).then(function (cred) { return boundWait(ctx.auth.signInWithCredential(cred), 30000); }); }).then(function (r) { return normUser(r.user); });
         }
-        return appPromise.then(function (ctx) { return ctx.auth.signInWithPopup(new ctx.fb.auth.GoogleAuthProvider()); }).then(function (r) { return normUser(r.user); });
+        return ensureApp().then(function (ctx) { return ctx.auth.signInWithPopup(new ctx.fb.auth.GoogleAuthProvider()); }).then(function (r) { return normUser(r.user); });
       },
       signInApple: function () {
         var plug = nativeAuthPlugin();
         if (plug) {
-          return appPromise.then(function (ctx) { return appleCredential(ctx, plug).then(function (cred) { return ctx.auth.signInWithCredential(cred); }); }).then(function (r) { return normUser(r.user); });
+          return ensureApp().then(function (ctx) { return appleCredential(ctx, plug).then(function (cred) { return boundWait(ctx.auth.signInWithCredential(cred), 30000); }); }).then(function (r) { return normUser(r.user); });
         }
-        return appPromise.then(function (ctx) { return ctx.auth.signInWithPopup(new ctx.fb.auth.OAuthProvider("apple.com")); }).then(function (r) { return normUser(r.user); });
+        return ensureApp().then(function (ctx) { return ctx.auth.signInWithPopup(new ctx.fb.auth.OAuthProvider("apple.com")); }).then(function (r) { return normUser(r.user); });
       },
+      /* U4 (app v49): the JS auth network calls race a 30 second
+         bound. The timeout error rides the rejection path each
+         call already owns (the door walk and doorFail, the demo's
+         unavailable line) exactly as a network failure does: its
+         code is no credential code, so no surface mistakes it for
+         a refusal. The web popup doors are NOT raced: closing the
+         popup is the user's own exit and already rejects. */
       signInEmail: function (email, password) {
-        return appPromise.then(function (ctx) { return ctx.auth.signInWithEmailAndPassword(email, password); }).then(function (r) { return normUser(r.user); });
+        return ensureApp().then(function (ctx) { return boundWait(ctx.auth.signInWithEmailAndPassword(email, password), 30000); }).then(function (r) { return normUser(r.user); });
       },
       signUpEmail: function (email, password, name) {
-        return appPromise.then(function (ctx) { return ctx.auth.createUserWithEmailAndPassword(email, password); }).then(function (r) {
+        return ensureApp().then(function (ctx) { return boundWait(ctx.auth.createUserWithEmailAndPassword(email, password), 30000); }).then(function (r) {
           var nm = typeof name === "string" ? name.trim() : "";
-          if (nm && r.user) return r.user.updateProfile({ displayName: nm }).then(function () { return normUser(r.user); });
+          if (nm && r.user) return boundWait(r.user.updateProfile({ displayName: nm }), 30000).then(function () { return normUser(r.user); });
           return normUser(r.user);
         });
       },
       setDisplayName: function (name) {
-        return appPromise.then(function (ctx) {
+        return ensureApp().then(function (ctx) {
           var u = ctx.auth.currentUser;
           if (!u) throw new Error("no account is signed in");
-          return u.updateProfile({ displayName: typeof name === "string" ? name.trim() : "" });
+          return boundWait(u.updateProfile({ displayName: typeof name === "string" ? name.trim() : "" }), 30000);
         }).then(function () { return true; });
       },
       resetPassword: function (email) {
-        return appPromise.then(function (ctx) { return ctx.auth.sendPasswordResetEmail(email); });
+        return ensureApp().then(function (ctx) { return boundWait(ctx.auth.sendPasswordResetEmail(email), 30000); });
       },
       signInAnon: function () {
-        return appPromise.then(function (ctx) { return ctx.auth.signInAnonymously(); }).then(function (r) { return normUser(r.user); });
+        return ensureApp().then(function (ctx) { return boundWait(ctx.auth.signInAnonymously(), 30000); }).then(function (r) { return normUser(r.user); });
       },
       signOut: function () {
         /* Inside the package the native layer holds its own session
@@ -263,7 +368,7 @@
         var plug = nativeAuthPlugin();
         var nativeOut = plug ? Promise.resolve().then(function () { return plug.signOut(); }).catch(function () { return null; }) : Promise.resolve();
         return nativeOut.then(function () {
-          return appPromise.then(function (ctx) { return ctx.auth.signOut(); });
+          return ensureApp().then(function (ctx) { return ctx.auth.signOut(); });
         });
       },
       /* The deletion check and the last step (design section 7).
@@ -271,22 +376,22 @@
          a wrong password is refused by Firebase itself and nothing
          downstream ever runs. */
       reauthEmail: function (password) {
-        return appPromise.then(function (ctx) {
+        return ensureApp().then(function (ctx) {
           var u = ctx.auth.currentUser;
           if (!u || !u.email) throw new Error("no email account is signed in");
-          return u.reauthenticateWithCredential(ctx.fb.auth.EmailAuthProvider.credential(u.email, password));
+          return boundWait(u.reauthenticateWithCredential(ctx.fb.auth.EmailAuthProvider.credential(u.email, password)), 30000);
         }).then(function () { return true; });
       },
       reauthGoogle: function () {
         var plug = nativeAuthPlugin();
         if (plug) {
-          return appPromise.then(function (ctx) {
+          return ensureApp().then(function (ctx) {
             var u = ctx.auth.currentUser;
             if (!u) throw new Error("no account is signed in");
-            return googleCredential(ctx, plug).then(function (cred) { return u.reauthenticateWithCredential(cred); });
+            return googleCredential(ctx, plug).then(function (cred) { return boundWait(u.reauthenticateWithCredential(cred), 30000); });
           }).then(function () { return true; });
         }
-        return appPromise.then(function (ctx) {
+        return ensureApp().then(function (ctx) {
           var u = ctx.auth.currentUser;
           if (!u) throw new Error("no account is signed in");
           return u.reauthenticateWithPopup(new ctx.fb.auth.GoogleAuthProvider());
@@ -295,20 +400,20 @@
       reauthApple: function () {
         var plug = nativeAuthPlugin();
         if (plug) {
-          return appPromise.then(function (ctx) {
+          return ensureApp().then(function (ctx) {
             var u = ctx.auth.currentUser;
             if (!u) throw new Error("no account is signed in");
-            return appleCredential(ctx, plug).then(function (cred) { return u.reauthenticateWithCredential(cred); });
+            return appleCredential(ctx, plug).then(function (cred) { return boundWait(u.reauthenticateWithCredential(cred), 30000); });
           }).then(function () { return true; });
         }
-        return appPromise.then(function (ctx) {
+        return ensureApp().then(function (ctx) {
           var u = ctx.auth.currentUser;
           if (!u) throw new Error("no account is signed in");
           return u.reauthenticateWithPopup(new ctx.fb.auth.OAuthProvider("apple.com"));
         }).then(function () { return true; });
       },
       deleteCurrentUser: function () {
-        return appPromise.then(function (ctx) {
+        return ensureApp().then(function (ctx) {
           var u = ctx.auth.currentUser;
           if (!u) throw new Error("no account is signed in");
           return u.delete();
@@ -317,7 +422,7 @@
       /* The Firestore document store seam (accounts.js engine shape),
          wired over the same loaded SDK for account-sync.js. */
       store: function () {
-        return appPromise.then(function (ctx) {
+        return ensureApp().then(function (ctx) {
           var db = ctx.db;
           function ref(path) {
             var parts = path.split("/");
