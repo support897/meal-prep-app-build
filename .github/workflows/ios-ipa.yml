@@ -49,7 +49,7 @@ jobs:
             mkdir -p "store-build/www/$(dirname "$f")"
             cp "$f" "store-build/www/$f"
           done
-          grep -q 'mealprep-v43' store-build/www/service-worker.js
+          grep -q 'mealprep-v44' store-build/www/service-worker.js
           echo "www tree assembled: $(find store-build/www -type f | wc -l) files"
 
       - name: Install dependencies
