@@ -395,19 +395,21 @@
   /* ---------------- the name (Law F, sequenced by the v4 tour) ----
      The name is still collected at joining; in v33 it is asked by
      Mina's tour, at its first stop, after the door. The door creates
-     the account with NO name on it: when no name is known at the
-     first sign in, the join is DEFERRED (the device adopts the
-     account locally, flagged by device.pendingJoinUid) and no
-     profile is written at all until the name lands, so the
-     profile's FIRST write carries it, through tourNameAnswered
-     below, the v27 pending name path re-pointed at the tour. While
-     a join is pending, pushes are held (see schedulePush): a stray
-     save must never create a nameless profile first. If the name
-     stop is closed unanswered, the re-ask rule offers it once more
-     on the NEXT visit (a later session, never the same one), then
-     never again; after that the name lives only in the Account
-     card's Edit, which completes a pending join the same way. A
-     name known by any road ends every ask at once. */
+     the account with NO name on it, and the profile is created at
+     that same first sign in with whatever name is known by then
+     (a provider name, or none at all): the name is DATA on the
+     profile, never a gate on saving (app v50, the save-forever
+     cure for QA's build 12 Finding 1, verdict c894e00a). The v33
+     shape DEFERRED the join until the name landed and held every
+     push behind it, so a person who skipped the optional name
+     cooked in an account nothing ever reached; now the profile
+     exists from the first moment, every push runs from the first
+     moment, and the answer, whenever it comes, updates the profile
+     through saveName like any other edit. If the name stop is
+     closed unanswered, the re-ask rule offers it once more on the
+     NEXT visit (a later session, never the same one), then never
+     again; after that the name lives only in the Account card's
+     Edit. A name known by any road ends every ask at once. */
   function knownName(user, docs) {
     var carried = (docs && docs.profile && typeof docs.profile.name === "string" && docs.profile.name) || (user && user.displayName) || "";
     if (carried) return carried;
@@ -471,46 +473,17 @@
     if (tourWillAsk) return;
     if (window.MP_NAME_ASK) window.MP_NAME_ASK.show();
   }
-  /* The name lands. For a pending join this is the deferred first
-     write itself (the import gate read fresh, exactly as the
-     door-first create read it); for everyone else it is the plain
-     save the Account card's Edit has always made. */
+  /* The name lands. It is a plain save, the same one the Account
+     card's Edit has always made (app v50): the profile already
+     exists (created at the first sign in, name or no name), so
+     the answer updates it as data through the ordinary push, and
+     the sign in record's display name follows inside saveName.
+     Before v50 this function also carried the deferred join's
+     first write for a pending join; the join no longer defers,
+     so there is no pending write left to carry. */
   function tourNameAnswered(nm) {
     var user = currentUser;
     if (!user || user.isAnonymous || device.demo) return Promise.resolve();
-    if (device.pendingJoinUid === user.uid) {
-      return reloadOnTimeout(storePromise.then(function (store) {
-        return A.pullAccount(store, user.uid).then(function (docs) {
-          var pot = liveState();
-          var gate = A.importGate({ profile: docs.profile, potState: pot, docs: docs, deviceConsumed: device.guestPotConsumed });
-          window.MP_AUTH.setDisplayName(nm).then(function () {}, function () {});
-          if (gate === "offer") {
-            adopting = true;
-            var raw = storage.get(A.LIVE_KEY);
-            if (raw) storage.set(A.guestCacheKey(), raw);
-            var startBlank = blankState();
-            startBlank.accountName = nm;
-            if (pot && pot.guideState) startBlank.guideState = pot.guideState;
-            return A.pushAccount(store, user.uid, startBlank, null, nowIso()).then(function (created) {
-              snapshot = created;
-              setLive(startBlank);
-              storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startBlank));
-              device.pendingJoinUid = null; device.pendingImportUid = user.uid; saveDevice();
-              return dailyStamps(user, true);
-            }).then(function () { adopting = false; location.reload(); });
-          }
-          var st = liveState() || blankState();
-          st.accountName = nm;
-          return A.pushAccount(store, user.uid, st, null, nowIso()).then(function (created) {
-            snapshot = created;
-            setLive(st);
-            storage.set(A.cacheKeyFor(user.uid), JSON.stringify(st));
-            device.pendingJoinUid = null; saveDevice();
-            return dailyStamps(user, true);
-          }).then(function () { location.reload(); });
-        });
-      }).catch(function () {}));
-    }
     saveName(user, nm);
     renderSignedIn(user, {});
     toast(t("account.nameSavedToast"));
@@ -542,9 +515,8 @@
       var msg = document.getElementById("accNameMsg");
       var nm = document.getElementById("accNameInput").value.trim();
       if (!nm) { if (msg) msg.textContent = t("account.typeNameFirst"); return; }
-      /* A name typed here ends every ask, and for a pending join it
-         IS the deferred first write (tourNameAnswered's road). */
-      if (device.pendingJoinUid === user.uid) { tourNameAnswered(nm); return; }
+      /* A name typed here ends every ask; it lands as data on the
+         profile that has existed since the first sign in (app v50). */
       saveName(user, nm);
       renderSignedIn(user, {});
       toast(t("account.nameSavedToast"));
@@ -721,10 +693,12 @@
   /* ---------------- sync ---------------- */
   function schedulePush() {
     if (!currentUser || adopting || deleting) return;
-    /* A pending join holds every push: the profile's first write is
-       the name landing, and a stray save must never beat it there
-       with a nameless profile. */
-    if (device.pendingJoinUid && device.pendingJoinUid === currentUser.uid) { pushPending = false; return; }
+    /* Pushes are never held for a name (app v50, QA build 12
+       Finding 1): the profile exists from the first sign in, so
+       the save hook carries changes from the first moment, name
+       answered or not. Before v50 a pending join held every push
+       here, and an unanswered optional name silently starved the
+       account of every save it ever made. */
     pushPending = true;
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(function () {
@@ -769,12 +743,15 @@
   };
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState !== "visible" || !currentUser || currentUser.isAnonymous || adopting || pushPending) return;
-    if (device.pendingJoinUid && device.pendingJoinUid === currentUser.uid) return;
     var uid = currentUser.uid;
     /* The refresh pull races the same 30 second bound (app v49,
        U5): a hang lands in the rejection handler beside it and
-       the session simply keeps its working copy. */
-    WAIT.bound(storePromise.then(function (store) { return A.pullAccount(store, uid); }), 30000).then(function (docs) {
+       the session simply keeps its working copy. It reads from
+       the server (app v50, Finding 2's second shape): an answer
+       out of the SDK's offline semantics here would be adopted
+       over the working copy below, so this read must be the
+       server's truth or no answer at all. */
+    WAIT.bound(storePromise.then(function (store) { return A.pullAccount(store, uid, { source: "server" }); }), 30000).then(function (docs) {
       if (JSON.stringify(docs) !== JSON.stringify(snapshot)) {
         snapshot = docs;
         var pulledState = A.docsToState(docs).state;
@@ -821,14 +798,16 @@
   }
 
   /* Create a brand new account's profile from the designed empty
-     state, carrying the person's name from the first write (the
-     name on the Google or Apple profile; the asked name takes the
-     deferred road through tourNameAnswered instead). When the
-     import gate is about to offer the
-     guest pot, the account is created empty and the pot waits in
-     the guest cache, one tap from the Account card; otherwise the
-     working copy starts as the designed empty state. Either way
-     the device adopts the account and reloads onto it. */
+     state, carrying the name known by any road at that moment
+     (the name on the Google or Apple profile, or none at all:
+     app v50 creates the profile at once either way, and a name
+     the tour asks later lands as an ordinary profile update
+     through tourNameAnswered's save). When the import gate is
+     about to offer the guest pot, the account is created empty
+     and the pot waits in the guest cache, one tap from the
+     Account card; otherwise the working copy starts as the
+     designed empty state. Either way the device adopts the
+     account and reloads onto it. */
   function createProfile(store, user, gate, acctName) {
     if (gate === "offer") {
       adopting = true;
@@ -864,6 +843,18 @@
   function slowLoadLine() {
     var m = document.getElementById("accMsg2");
     if (m) m.textContent = t("account.slowLoad");
+  }
+
+  /* The observation cure (app v50, QA build 12 round): views render
+     on entry only, so a resolution that lands while a view stands
+     open leaves that view showing its pre-pull paint until the
+     person navigates. When a resolution lands WITHOUT a reload,
+     the open view is re-rendered once through the app's own hook,
+     so what landed is what the person sees. Landings that reload
+     (adoptions, profile creates) need no call: the reload repaints
+     everything from the adopted copy. */
+  function rerenderOpenView() {
+    if (window.MP_RERENDER) window.MP_RERENDER();
   }
 
   function onUser(user) {
@@ -904,20 +895,35 @@
          slow line. */
       WAIT.bound(storePromise.then(function (store) {
         var pulledDocs = null;
-        return A.pullAccount(store, user.uid).then(function (docs) {
+        /* The resolution pull reads from the SERVER (app v50,
+           Finding 2): with the Listen channel wedged the SDK used
+           to answer this pull out of its offline semantics within
+           seconds, an empty account with no rejection, no timeout
+           and no honest line, and for an account holding real data
+           that empty answer is what the person would have been
+           shown. A server source read pends or refuses instead,
+           so the bound above and its fallback own the shape and
+           account.slowLoad stands. */
+        return A.pullAccount(store, user.uid, { source: "server" }).then(function (docs) {
+          if (docs.profile) return docs;
+          /* No profile on the server for an adopted account (app
+             v50, the Finding 1 heal): the pre-v50 deferred join
+             could leave exactly this behind, a device flagged
+             adopted whose every push was held for a name that
+             never came, its cooking living only in the working
+             copy. The cure creates the profile at once FROM that
+             working copy, so everything on this device is saved
+             from this moment and the held edits finally land; the
+             resolution then continues on the created documents. */
+          var healed = liveState() || blankState();
+          return A.pushAccount(store, user.uid, healed, null, nowIso()).then(function (created) {
+            if (device.pendingJoinUid) { device.pendingJoinUid = null; saveDevice(); }
+            return created;
+          });
+        }).then(function (docs) {
           snapshot = docs;
           pulledDocs = docs;
-          if (!docs.profile && device.pendingJoinUid === user.uid) {
-            /* The deferred join is still waiting on its name: no
-               profile exists yet, so there is no tier to resolve and
-               nothing to stamp. The tour (or the re-ask pop) is the
-               road; refresh the tour now the session is known. */
-            renderSignedIn(user, {});
-            if (window.MP_TOUR) window.MP_TOUR.refresh();
-            nameAskFlow(user, docs);
-            return null;
-          }
-          return A.syncTier(store, user.uid, { demo: false });
+          return A.syncTier(store, user.uid, { demo: false, source: "server" });
         }).then(function (t) {
           if (t) {
             entitlement = t.entitlement;
@@ -933,7 +939,7 @@
                getEntitlement itself stays a pure session read, so
                no free feature ever consults the record. A denied
                or failed read resolves free (fail closed). */
-            return A.readEntitlementRecord(store, user.uid, { demo: false }).then(function (r) {
+            return A.readEntitlementRecord(store, user.uid, { demo: false, source: "server" }).then(function (r) {
               if (r && r.entitlement === "pro") entitlement = "pro";
               /* The payments module warms up beside the record read
                  (enabling build, app v47): refresh hands the real
@@ -944,6 +950,7 @@
                  sole authority (HQ's fence). */
               if (window.MP_PAYMENTS && window.MP_PAYMENTS.enabled()) window.MP_PAYMENTS.refresh(user.uid);
               renderSignedIn(user, {});
+              rerenderOpenView();
               nameAskFlow(user, pulledDocs);
               return dailyStamps(user, false);
             });
@@ -956,30 +963,56 @@
        races the same 30 second bound as the adopted road above
        (app v49, U5), with the same fallback and the same line. */
     WAIT.bound(storePromise.then(function (store) {
-      return A.pullAccount(store, user.uid).then(function (docs) {
+      /* The server source again (app v50, Finding 2): a signup
+         decision made on an offline empty answer would create a
+         blank profile over a real account. */
+      return A.pullAccount(store, user.uid, { source: "server" }).then(function (docs) {
         var pot = liveState();
         var gate = A.importGate({ profile: docs.profile, potState: pot, docs: docs, deviceConsumed: device.guestPotConsumed });
         var isSignup = !docs.profile;
         if (isSignup) {
           /* A brand new account. The door created it and asked
-             nothing else (the v4 shape): a Google or Apple join
-             whose profile already carries a name is created at
-             once, name and all, exactly as before. When no name is
-             known, the join is DEFERRED instead: the device adopts
-             the account locally, no profile is written, and Mina's
-             tour asks the name at its first stop, inside the app;
-             the answer lands as the profile's first write through
-             tourNameAnswered. The guest pot is stashed untouched,
-             exactly as an offered import would leave it. */
+             nothing else (the v4 shape): the profile is created at
+             once, carrying the name known by any road (a Google or
+             Apple profile name, or none at all). The name is data,
+             never a gate (app v50, QA build 12 Finding 1): Mina's
+             tour still asks it at its first stop inside the app,
+             and the answer updates the profile through the ordinary
+             save, but no save ever waits for it, and the guest pot
+             keeps the import gate's own road either way. */
           var acctName = user.displayName || "";
-          if (acctName) return createProfile(store, user, gate, acctName);
-          var raw = storage.get(A.LIVE_KEY);
-          if (raw && !device.guestPotConsumed) storage.set(A.guestCacheKey(), raw);
-          device.uid = user.uid; device.adoptedUid = user.uid; device.pendingJoinUid = user.uid; saveDevice();
-          renderSignedIn(user, {});
-          if (window.MP_TOUR) window.MP_TOUR.refresh();
-          nameAskFlow(user, docs);
-          return Promise.resolve();
+          /* The legacy heal (app v50): a device the pre-v50 deferred
+             join left behind can hold this account's only copy in
+             its per account cache (the copy its last sign out set
+             aside) while the server still has no profile. That copy
+             is the account's own, keyed by its uid and written only
+             from its own sessions: create the profile FROM it, so
+             the stranded cooking is saved and adopted, never
+             overwritten by a blank start. The guest pot is not that
+             copy and keeps its road: when the gate would offer it,
+             it is stashed for the offer exactly as createProfile
+             leaves it, and the offer re-runs after the reload. */
+          var cachedRaw = storage.get(A.cacheKeyFor(user.uid));
+          var cached = null;
+          try { cached = cachedRaw ? JSON.parse(cachedRaw) : null; } catch (e) {}
+          if (cached && A.hasUserData(cached)) {
+            adopting = true;
+            if (gate === "offer") {
+              var raw0 = storage.get(A.LIVE_KEY);
+              if (raw0 && !device.guestPotConsumed) storage.set(A.guestCacheKey(), raw0);
+              device.pendingImportUid = user.uid;
+            }
+            device.uid = user.uid; device.adoptedUid = user.uid;
+            if (device.pendingJoinUid) device.pendingJoinUid = null;
+            saveDevice();
+            return reloadOnTimeout(A.pushAccount(store, user.uid, cached, null, nowIso()).then(function (created) {
+              snapshot = created;
+              setLive(cached);
+              storage.set(A.cacheKeyFor(user.uid), JSON.stringify(cached));
+              return dailyStamps(user, true);
+            }).then(function () { location.reload(); }));
+          }
+          return createProfile(store, user, gate, acctName);
         }
         adopt(user, docs);
         return dailyStamps(user, false);
@@ -994,7 +1027,7 @@
        U5): a pull that never answers lands in the swallow catch
        below, exactly as a refused one does. */
     WAIT.bound(storePromise.then(function (store) {
-      return A.pullAccount(store, user.uid).then(function (docs) {
+      return A.pullAccount(store, user.uid, { source: "server" }).then(function (docs) {
         var potRaw = storage.get(A.guestCacheKey());
         var pot = null;
         try { pot = potRaw ? JSON.parse(potRaw) : null; } catch (e) {}
@@ -1004,6 +1037,7 @@
            gate that matters, plus the pot itself. */
         if (pot && !docs.profile.dataImportedAt && !device.guestPotConsumed) {
           renderSignedIn(user, { importOffer: true });
+          rerenderOpenView();
         } else {
           device.pendingImportUid = null; saveDevice();
         }
@@ -1056,9 +1090,10 @@
     var raw = storage.get(A.LIVE_KEY);
     if (raw) storage.set(A.cacheKeyFor(user.uid), raw);
     var st = liveState();
-    /* A pending join signs out without any push: there is no profile
-       to push to yet, and signing in again re-runs the join. */
-    var push = (st && device.pendingJoinUid !== user.uid) ? storePromise.then(function (store) { return A.pushAccount(store, user.uid, st, snapshot, nowIso()); }) : Promise.resolve();
+    /* Sign out pushes the working copy first, always (app v50):
+       every signed in account has had a profile to push to since
+       its first moment, so no join state signs out unsaved. */
+    var push = st ? storePromise.then(function (store) { return A.pushAccount(store, user.uid, st, snapshot, nowIso()); }) : Promise.resolve();
     return boundSignOut(push.then(function () {}, function () {}).then(function () {
       var guestRaw2 = storage.get(A.guestCacheKey());
       if (guestRaw2 && !device.guestPotConsumed) { try { setLive(JSON.parse(guestRaw2)); } catch (e) { setLive(blankState()); } }

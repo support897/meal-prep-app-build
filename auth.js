@@ -432,7 +432,14 @@
           }
           var swapTs = makeSwapTs(ctx.fb);
           return {
-            getDoc: function (path) { return ref(path).get().then(function (s) { return s.exists ? s.data() : null; }); },
+            /* A caller may name the read source (app v50):
+               { source: "server" } forces the read to the server,
+               so a strangled Listen channel PENDS or REFUSES
+               instead of answering out of the SDK's offline cache
+               with a silent empty (QA build 12 round, Finding 2).
+               No source named: the SDK's default read, exactly as
+               before. */
+            getDoc: function (path, opts) { var r = ref(path); return (opts && opts.source ? r.get({ source: opts.source }) : r.get()).then(function (s) { return s.exists ? s.data() : null; }); },
             setDoc: function (path, data) { return ref(path).set(swapTs(data)); },
             /* Merge write (build 8): the delta lands on the stored
                doc and fields the delta does not name keep their
@@ -441,8 +448,9 @@
             setDocMerge: function (path, data) { return ref(path).set(swapTs(data), { merge: true }); },
             updateDoc: function (path, data) { return ref(path).update(swapTs(data)); },
             deleteDoc: function (path) { return ref(path).delete(); },
-            listCollection: function (path) {
-              return ref(path).get().then(function (qs) { var out = {}; qs.forEach(function (d) { out[d.id] = d.data(); }); return out; });
+            listCollection: function (path, opts) {
+              var r = ref(path);
+              return (opts && opts.source ? r.get({ source: opts.source }) : r.get()).then(function (qs) { var out = {}; qs.forEach(function (d) { out[d.id] = d.data(); }); return out; });
             }
           };
         });

@@ -1866,6 +1866,12 @@
       save();
     }
   };
+  /* The accounts layer's landing hook (app v50, QA build 12
+     observation): views render on entry only, so when a sign in
+     resolution lands without a reload, the layer calls this and
+     the view standing open re-renders once, showing what landed
+     instead of its pre-pull paint until the person navigates. */
+  window.MP_RERENDER = function () { render(); };
   function ensureNameAsk() {
     let m = $("nameAskModal");
     if (m) return m;

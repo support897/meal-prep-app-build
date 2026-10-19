@@ -314,7 +314,7 @@
     opts = opts || {};
     if (!uid || opts.demo) return Promise.resolve({ entitlement: "free", mirror: null, writes: 0, skipped: true });
     var path = tierPath(uid);
-    return store.getDoc(path).then(function (doc) {
+    return store.getDoc(path, opts).then(function (doc) {
       var mirror = doc && isPlainObj(doc.value) ? doc.value.plan : null;
       var writes = 0;
       return store.setDoc(path, { value: { plan: "pro" } }).then(function () {
@@ -402,7 +402,7 @@
   function readEntitlementRecord(store, uid, opts) {
     opts = opts || {};
     if (!uid || opts.demo) return Promise.resolve({ entitlement: "free", record: null, skipped: true });
-    return store.getDoc(subscriptionPath(uid)).then(function (rec) {
+    return store.getDoc(subscriptionPath(uid), opts).then(function (rec) {
       return { entitlement: entitlementFromRecord(rec, opts.nowMs), record: isPlainObj(rec) ? rec : null, skipped: false };
     }, function () {
       return { entitlement: "free", record: null, skipped: false };
@@ -636,12 +636,18 @@
      Paths are Firestore style: users/{uid}, users/{uid}/familyMembers. */
   function userPath(uid) { return "users/" + uid; }
 
-  function pullAccount(store, uid) {
-    return store.getDoc(userPath(uid)).then(function (profile) {
+  /* The read source rides along when the caller names one (app
+     v50): the sign in resolution passes { source: "server" } so a
+     wedged Listen channel can never answer the pull out of the
+     SDK's offline semantics with a silent empty account (QA build
+     12 round, Finding 2). Callers that name no source keep the
+     seam's default read, exactly as before. */
+  function pullAccount(store, uid, opts) {
+    return store.getDoc(userPath(uid), opts).then(function (profile) {
       var docs = { profile: profile || null, collections: {} };
       return COLLECTIONS.reduce(function (chain, kind) {
         return chain.then(function () {
-          return store.listCollection(userPath(uid) + "/" + kind).then(function (bag) { docs.collections[kind] = bag || {}; });
+          return store.listCollection(userPath(uid) + "/" + kind, opts).then(function (bag) { docs.collections[kind] = bag || {}; });
         });
       }, Promise.resolve()).then(function () { return docs; });
     });
