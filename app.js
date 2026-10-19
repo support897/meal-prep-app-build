@@ -461,6 +461,14 @@
     if (g && tuckedList().indexOf(g) === -1) openGroupId = g;
     renderNav();
     render();
+    /* QA F1 (build 9): a nav choice on the phone shape lands the
+       person ON the view, so the drawer closes with the switch.
+       Left open, the drawer stayed up over the new view (the page
+       squeezed into the sliver) and the app capture listener above
+       ate the first tap on the new view just to close the drawer;
+       only the second tap worked. Desktop keeps its panel beside
+       the content: its nav choices never close it. */
+    if (window.matchMedia("(max-width: 900px)").matches && state.ui && state.ui.sidebarHidden !== true) setSidebar(true, false);
   }
   function render() {
     renderSide();
