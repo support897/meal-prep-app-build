@@ -1631,6 +1631,20 @@
   const TOUR_VIEWS = { 1: "calendar", 2: "calendar", 3: "prefs", 4: "family", 5: "groceries", 6: "calendar", 7: "prefs" };
   let guideStep = 1;
   let tourOpenedSidebar = false;
+  /* The tour's step 1 memory for this page life (app v57, the
+     tour cure — QA's build 19 retest, leg (e) arm 3, and the
+     F-B19-1 bisect verdict's tour section): whether step 1 has
+     been DRAWN in the welcome shape here, and whether the name
+     stop has been DRAWN here. A landing's refresh re-renders
+     only the standing step, so a walk that consumed step 1 in
+     the welcome shape before the session landed carries no
+     second chance from the refresh alone — these two flags
+     are what the refresh's rewind (at MP_TOUR below) reads.
+     A stop that drew and was sailed past blank sets the
+     second flag too: it was asked, and the re-offer
+     discipline owns any later asking, never a rewind. */
+  let tourStep1WelcomeDrawn = false;
+  let tourNameStopDrawn = false;
   /* The name stop shows only for an account session with no name
      known yet; the accounts layer answers (it owns the session).
      Guests and named users get the welcome card at stop 1 instead. */
@@ -1691,6 +1705,20 @@
      a typed name saves on ANY exit. */
   function tourNext() {
     if (guideStep === 1 && tourNameVariant()) {
+      /* The variant is decided AT ADVANCE TIME (app v57, the
+         tour cure): the card standing here may have been drawn
+         as the welcome variant before the session landed (at
+         INIT no session exists to ask the name of), while this
+         live read says the name stop applies now — so when the
+         drawn card carries no name field, the stop renders
+         first and the walk waits on it, instead of the
+         collection below sailing past a field that was never
+         drawn. The drawn card is the witness (its own HTML),
+         not a lookup: the stop is what renderGuideStep drew.
+         The next Next collects through the standing branch,
+         blank sails included. */
+      const card = $("guideCard");
+      if (!card || card.innerHTML.indexOf("tourName") === -1) { renderGuideStep(); return; }
       const input = $("tourName");
       const nm = input ? input.value.trim() : "";
       guideSetStep(2); renderGuideStep();
@@ -1721,6 +1749,7 @@
     if (step === 2 && state.ui && state.ui.sidebarHidden) { tourOpenedSidebar = true; setSidebar(false, false); }
     if (step === 1) {
       if (tourNameVariant()) {
+        tourNameStopDrawn = true;
         /* Stop 1, the name: asked inside the tour, in Mina's own
            words, one field, one Next. The answer lands through the
            accounts layer's pending name path (see tourNext). */
@@ -1729,6 +1758,7 @@
         const ti = $("tourName");
         if (ti) setTimeout(function () { try { ti.focus(); } catch (e) {} }, 60);
       } else {
+        tourStep1WelcomeDrawn = true;
         /* Stop 1, the welcome card (guests, and anyone whose name is
            already known): when the person's name is known, Mina
            greets them by it. The six word bubble cap bends only by
@@ -1871,7 +1901,21 @@
      time); the pop renders here, in the tour's own register, and its
      Save answers through the same hook as the tour's name stop. */
   window.MP_TOUR = {
-    refresh: function () { if (!$("guideModal").classList.contains("hidden")) renderGuideStep(); },
+    refresh: function () {
+      if ($("guideModal").classList.contains("hidden")) return;
+      /* The step-bound flip's other half (app v57, the tour
+         cure): a landing that finds the guide already PAST
+         step 1, with step 1 consumed in the welcome shape in
+         this page life and the name stop never drawn, rewinds
+         the walk to step 1 so the stop renders — the refresh
+         re-renders only the standing step, so without the
+         rewind the stop is lost for the whole run and only
+         the weaker pop ever asks. A stop that drew and was
+         sailed past (tourNameStopDrawn) is never re-armed
+         here: the re-offer discipline owns that road. */
+      if (guideStep > 1 && tourStep1WelcomeDrawn && !tourNameStopDrawn && tourNameVariant()) guideSetStep(1);
+      renderGuideStep();
+    },
     /* The ask count is written HERE, by the state owner: the tour
        itself saves the guide state as it walks, so a write made on
        a parsed copy in the accounts layer would be overwritten by
@@ -1895,6 +1939,39 @@
     setAccountName: function (nm) {
       state.accountName = nm;
       save();
+    },
+    /* A landing's state, adopted WHOLESALE (app v57, the
+       F-B19-1 cure, clause 1 — QA's build 19 retest verdict,
+       blob 63b8104f, Finding F-B19-1, and the F-B19-1 bisect
+       verdict's root): the wholesale form of the routing the
+       two fields above already ride. This object is the copy
+       save() serialises over the live key on every save, so a
+       sign in landing that wrote the stored copies alone left
+       this copy stale — and the landing tail's own bookkeeping
+       save (the name ask's bump, riding the write just below)
+       then serialised the stale copy over the landing and
+       pushed it against the fresh snapshot, deleting at the
+       server what the landing had just repaired: a birth
+       session's member, a return's whole account, a census
+       trip's deleted day — one mechanism, three faces. Every
+       landing that writes the live key now routes its state
+       through here (the accounts layer calls it beside its
+       setLive, guarded exactly as the fields above are
+       guarded), so from the landing on, memory, live key,
+       cache and snapshot agree, and no later save — the
+       tail's or the person's — can compose from a pre-landing
+       copy. The landed state is repaired through the same
+       normaliseState a boot parses with, so the adopted copy
+       is the copy a reload would have produced. Landings
+       whose road reloads call it too: a reload can be parked
+       by the delete flow deferral (the accounts layer's cure
+       for the reload-on-adopt loss), and a parked session
+       lives on in this page. */
+    adoptLandedState: function (st) {
+      if (!st || typeof st !== "object") return;
+      state = normaliseState(JSON.parse(JSON.stringify(st)));
+      save();
+      render();
     }
   };
   /* The accounts layer's landing hook (app v50, QA build 12

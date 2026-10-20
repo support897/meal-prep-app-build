@@ -765,11 +765,15 @@
            becomes this account's working copy on this device. */
         snapshot = docs;
         setLive(pot);
+        /* App v57 (clause 1 + the reload deferral): the
+           import lands in the owner's memory too, and its
+           reload parks like every landing's. */
+        ownerAdopt(pot);
         storage.remove(A.guestCacheKey());
         device.guestPotConsumed = true; saveDevice();
         storage.set(A.cacheKeyFor(user.uid), JSON.stringify(pot));
         toast(t("import.dataInAccountToast"));
-        location.reload();
+        reloadAfterLanding();
       }, function () {
         /* Failure leaves the pot fully intact; the offer can be made
            again (design section 6, Security case 1). */
@@ -892,7 +896,19 @@
     if (!st || typeof st !== "object") return counts;
     counts.familyMembers = Array.isArray(st.family) ? st.family.length : 0;
     counts.pantryItems = Array.isArray(st.pantry) ? st.pantry.length : 0;
-    counts.planDays = (st.plan && typeof st.plan === "object" && !Array.isArray(st.plan)) ? Object.keys(st.plan).length : 0;
+    /* A plan day counts toward the census only when it
+       carries content (app v57, the F-B19-1 cure, clause 2):
+       a tombstone day — present but empty, the mark a
+       landing leaves for a day another device deleted, so
+       a reloaded boot's auto-fill never refills it — is not
+       planned content on either side of a comparison this
+       census feeds. The adjudication in accounts.js counts
+       a pulled tombstone document as a day standing at the
+       server, so a device copy holding the same day empty
+       must not read poorer for it; a copy holding the day
+       WITH content reads exactly as it always has. */
+    counts.planDays = 0;
+    if (st.plan && typeof st.plan === "object" && !Array.isArray(st.plan)) Object.keys(st.plan).forEach(function (day) { var d = st.plan[day]; if (d && typeof d === "object" && Object.keys(d).length) counts.planDays++; });
     counts.customRecipes = Array.isArray(st.customRecipes) ? st.customRecipes.length : 0;
     counts.shoppingExtras = Array.isArray(st.extras) ? st.extras.length : 0;
     var items = 0;
@@ -966,6 +982,51 @@
       }
     });
     return merged;
+  }
+  /* The landed state is adopted by the state owner too (app
+     v57, the F-B19-1 cure, clause 1 — the seam itself and its
+     ruling stand written at MP_TOUR.adoptLandedState in
+     app.js): every landing that writes the live key routes
+     its state through the owner beside its setLive, guarded
+     exactly as the single-field routings (saveName's,
+     bumpNameAsks') are guarded — seam absent, the storage
+     write stands as it always has. */
+  function ownerAdopt(st) {
+    if (window.MP_TOUR && window.MP_TOUR.adoptLandedState) window.MP_TOUR.adoptLandedState(st);
+  }
+  /* Tombstones (app v57, the F-B19-1 cure, clause 2 — the
+     bisect verdict's Face 1, Road B): a day this device holds
+     (in its cache, or in the working copy standing at the
+     landing) that the pulled state does NOT hold was deleted
+     on another device — the deletion is real, and the day
+     must land present-but-empty in the adopted state. Left
+     absent, a reloaded boot's INIT treats it as never
+     planned and its auto-fill refills it with fresh picks
+     (the regeneration road), and the next save carries the
+     refill back to the server: the deletion undone. The
+     empty day round-trips honestly: the engine writes it as
+     an empty plan day document, its repair keeps an empty
+     document an empty day, the app renders it an unplanned
+     day, and a later plan on that day writes normally. The
+     census never counts it (see stateCounts): a tombstone
+     is a deletion honoured, not content held. Mutates and
+     returns the landed state it is given; the pre-landing
+     copies are read BEFORE the caller writes anything, so
+     the call stands ahead of its setLive. */
+  function withTombstones(uid, landedState, pulledState) {
+    if (!landedState || typeof landedState !== "object") return landedState;
+    if (!landedState.plan || typeof landedState.plan !== "object" || Array.isArray(landedState.plan)) landedState.plan = {};
+    var held = {};
+    var live = liveState();
+    if (live && live.plan && typeof live.plan === "object" && !Array.isArray(live.plan)) Object.keys(live.plan).forEach(function (day) { held[day] = true; });
+    try {
+      var rawC = storage.get(A.cacheKeyFor(uid));
+      var cached = rawC ? JSON.parse(rawC) : null;
+      if (cached && cached.plan && typeof cached.plan === "object" && !Array.isArray(cached.plan)) Object.keys(cached.plan).forEach(function (day) { held[day] = true; });
+    } catch (e) {}
+    var pulledPlan = (pulledState && pulledState.plan && typeof pulledState.plan === "object" && !Array.isArray(pulledState.plan)) ? pulledState.plan : {};
+    Object.keys(held).forEach(function (day) { if (!(day in pulledPlan) && !(day in landedState.plan)) landedState.plan[day] = {}; });
+    return landedState;
   }
   /* The adjudication's proof, from this device and this session:
      the account's Auth creation stamp (never a client written
@@ -1133,9 +1194,16 @@
       if (JSON.stringify(docs) !== JSON.stringify(snapshot)) {
         snapshot = docs;
         var pulledState = A.docsToState(docs).state;
+        /* App v57 (the F-B19-1 cure): this landing too gains
+           its tombstones, the owner's adoption, and the
+           deferral-gated reload — it writes the live key like
+           every other landing, so it carries the same three
+           obligations. */
+        withTombstones(uid, pulledState, pulledState);
         setLive(pulledState);
         storage.set(A.cacheKeyFor(uid), JSON.stringify(pulledState));
-        location.reload();
+        ownerAdopt(pulledState);
+        reloadAfterLanding();
       }
     }, function (e) {
       /* Every refusal of the refresh pull takes the treatment
@@ -1170,10 +1238,31 @@
        refreshes the stash to the server's truth and ends the
        deadlock for that deletion. */
     var landedState = (opts && opts.suppressReconcile) ? pulled.state : reconcileWithCache(user.uid, pulled.state);
+    /* App v57 (the F-B19-1 cure): the landed state gains its
+       tombstones (clause 2 — on the reconciled road they mark
+       the days the cache holds that neither the pull nor the
+       reconciliation carried; on the trip road, the days the
+       stash held that the server's truth deleted), the state
+       owner adopts it (clause 1), and the reload takes the
+       deferral (the reload cure) — returning whether it fired,
+       which the first-sign-in road's convergence re-check
+       reads. The guest pot stash above has already read the
+       pre-landing copy, and the tombstone read inside
+       withTombstones still sees it too: nothing has written
+       the live key yet. */
+    withTombstones(user.uid, landedState, pulled.state);
     setLive(landedState);
     storage.set(A.cacheKeyFor(user.uid), JSON.stringify(landedState));
     device.uid = user.uid; device.adoptedUid = user.uid; saveDevice();
-    location.reload();
+    ownerAdopt(landedState);
+    /* A parked landing is COMPLETE (app v57, the reload
+       deferral): the adopting flag, which the reload used to
+       make moot, stands down when the reload parks, or this
+       session would never push again. The caller still reads
+       the return for the parked case. */
+    var fired = reloadAfterLanding();
+    if (!fired) adopting = false;
+    return fired;
   }
   function dailyStamps(user, isSignup) {
     if (device.lastActiveDay === todayStr() && device.lastActiveUid === user.uid) return Promise.resolve();
@@ -1221,28 +1310,48 @@
     return !delta.family.length && !delta.pantry.length && !delta.customRecipes.length && !delta.extras.length && !delta.events.length && !delta.imports.length &&
       !Object.keys(delta.plan).length && !Object.keys(delta.doneItems).length && !Object.keys(delta.hiddenItems).length;
   }
-  /* The plain road's landing merge: the start state carrying the
-     window's additions (live additions win in, union by item
-     identity) and a name answered inside the window over the
-     start state's — an answer or an edit made while the create
-     was in flight is the person's own save, and it lands. */
+  /* The plain road's landing merge: the start state UNIONED
+     with the working copy as it stands AT LANDING TIME (app
+     v57, the F-B19-1 cure, clause 3 — the bisect verdict's
+     Face 2, link A). Cure 5 measured the window's additions
+     against the copy as the create BEGAN — but on this road
+     that copy is captured after the person's first work
+     already stands in it (their saves during the door's
+     answer ride the same working copy the create reads), so
+     the member they added and the month they planned counted
+     as pre-existing, the delta came back empty, and the
+     landing wrote the blank start over the working copy:
+     the erase QA's birth-session staging caught, in about
+     half of its runs. The merge now unions against the
+     landing-time copy itself, in reconcileWithCache's shape
+     (identity union; the start state's fields win on a
+     shared identity; the landing copy's non-empty name wins
+     over the start's): work done during the create window
+     can never be classified pre-existing-and-erasable, and
+     no landing on this road writes a working copy poorer
+     than the one it replaces — the cross-cutting rule of
+     this round, in all four copies. entryLive stands as the
+     parameter of record (the offer road's stash still
+     measures against it); the union no longer consults it. */
   function mergeCreateWindow(entryLive, startState) {
     var now = liveState();
-    var delta = windowAdditions(entryLive, now);
     var merged = JSON.parse(JSON.stringify(startState));
+    if (!now || typeof now !== "object") return merged;
     ["family", "pantry", "customRecipes", "extras", "events", "imports"].forEach(function (field) {
       if (!Array.isArray(merged[field])) merged[field] = [];
       var have = {};
       merged[field].forEach(function (it) { have[itemKey(it)] = true; });
-      delta[field].forEach(function (it) { var k = itemKey(it); if (!have[k]) { merged[field].push(JSON.parse(JSON.stringify(it))); have[k] = true; } });
+      (Array.isArray(now[field]) ? now[field] : []).forEach(function (it) { var k = itemKey(it); if (!have[k]) { merged[field].push(JSON.parse(JSON.stringify(it))); have[k] = true; } });
     });
-    Object.keys(delta.plan).forEach(function (day) { merged.plan[day] = JSON.parse(JSON.stringify(delta.plan[day])); });
+    if (now.plan && typeof now.plan === "object") {
+      if (!merged.plan || typeof merged.plan !== "object") merged.plan = {};
+      Object.keys(now.plan).forEach(function (day) { if (!(day in merged.plan)) merged.plan[day] = JSON.parse(JSON.stringify(now.plan[day])); });
+    }
     ["doneItems", "hiddenItems"].forEach(function (field) {
       if (!merged[field] || typeof merged[field] !== "object") merged[field] = {};
-      Object.keys(delta[field]).forEach(function (k) { merged[field][k] = delta[field][k]; });
+      if (now[field] && typeof now[field] === "object") Object.keys(now[field]).forEach(function (k) { if (!(k in merged[field])) merged[field][k] = now[field][k]; });
     });
-    var entryName = entryLive && typeof entryLive.accountName === "string" ? entryLive.accountName : "";
-    if (now && typeof now.accountName === "string" && now.accountName && now.accountName !== entryName) merged.accountName = now.accountName;
+    if (typeof now.accountName === "string" && now.accountName) merged.accountName = now.accountName;
     return merged;
   }
 
@@ -1265,8 +1374,11 @@
      Both landings below now re-read the working copy before
      they set it.) */
   function createProfile(store, user, gate, acctName) {
-    /* The working copy as the create begins: the window's
-       additions are measured against this, and only those. */
+    /* The working copy as the create begins: the offer
+       road's stash below still measures the window against
+       this. The plain road's merge no longer does (app v57,
+       clause 3 — see mergeCreateWindow): it unions against
+       the copy as it stands at landing time. */
     var entryLive = liveState();
     if (gate === "offer") {
       adopting = true;
@@ -1307,8 +1419,12 @@
         if (!windowDeltaEmpty(windowAdditions(entryLive, nowOff))) storage.set(A.guestCacheKey(), JSON.stringify(nowOff));
         setLive(startBlank);
         storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startBlank));
+        /* App v57 (clause 1 + the reload deferral): the owner
+           adopts the blank start too, and the reload parks
+           behind an open delete flow like every landing's. */
+        ownerAdopt(startBlank);
         return dailyStamps(user, true);
-      }).then(function () { location.reload(); }), 30000);
+      }).then(function () { if (!reloadAfterLanding()) adopting = false; }), 30000);
     }
     var startState = blankState();
     startState.accountName = acctName;
@@ -1330,13 +1446,20 @@
         (merged.accountName || "") !== ((created.profile && created.profile.name) || "");
       storage.set(A.cacheKeyFor(user.uid), JSON.stringify(merged));
       setLive(merged);
+      /* App v57 (clause 1): the owner adopts the merged copy
+         at the landing — the post-create page used to boot on
+         whatever the erase left, and the NEXT landing's
+         convergence repaired the stored copies while this
+         page's memory kept the blank (the bisect verdict's
+         Face 2, link B). */
+      ownerAdopt(merged);
       device.uid = user.uid; device.adoptedUid = user.uid; saveDevice();
       if (!windowLanded) return dailyStamps(user, true);
       return A.pushAccount(store, user.uid, merged, created, nowIso()).then(function (next) {
         snapshot = next;
         return dailyStamps(user, true);
       });
-    }).then(function () { location.reload(); }), 30000);
+    }).then(function () { reloadAfterLanding(); }), 30000);
   }
 
   /* U5's honest line (app v49): the line lands on the Account
@@ -1371,6 +1494,10 @@
       stopResolutionRetry();
       sessionAnchorMs = null;
       censusStand = null;
+      /* The convergence re-check dies with the session too
+         (app v57, clause 4): its pull belongs to the account
+         that armed it. */
+      if (convergenceRecheckTimer) { clearTimeout(convergenceRecheckTimer); convergenceRecheckTimer = null; }
       var notice = storage.get("mealPrepNotice");
       if (notice) storage.remove("mealPrepNotice");
       renderSignedOut(notice || "");
@@ -1450,8 +1577,18 @@
        live and stash agree on the pulled documents and the
        deadlock cannot re-form for that deletion. */
     if (opts && opts.suppressReconcile) {
+      /* App v57 (the F-B19-1 cure): the pulled state gains its
+         tombstones and is adopted by the state owner before it
+         lands — on the shipped build this landing wrote the
+         stored copies alone, and the resolution tail's own
+         bookkeeping save then serialised the pre-landing
+         memory over them, so the trip's first later push
+         carried the deleted day back to the server (QA's
+         build 19 retest, leg (b)). */
+      withTombstones(user.uid, pulledState, pulledState);
       setLive(pulledState);
       try { storage.set(A.cacheKeyFor(user.uid), JSON.stringify(pulledState)); } catch (e) {}
+      ownerAdopt(pulledState);
       return;
     }
     var live = liveState();
@@ -1460,8 +1597,114 @@
     var poorer = !live || A.COLLECTIONS.some(function (kind) { return (have[kind] || 0) < (want[kind] || 0); });
     if (!poorer) return;
     var landedState = reconcileWithCache(user.uid, pulledState);
+    /* App v57: tombstones ride the reconciled landing too,
+       and the owner adopts what landed (clause 1) — this
+       convergence repaired the stored copies only, and the
+       landing tail's bookkeeping could clobber the repair
+       back out of the live key within the same landing (the
+       bisect verdict's Face 2 link B and Face 3-B). */
+    withTombstones(user.uid, landedState, pulledState);
     setLive(landedState);
     try { storage.set(A.cacheKeyFor(user.uid), JSON.stringify(landedState)); } catch (e) {}
+    ownerAdopt(landedState);
+  }
+
+  /* THE RELOAD DEFERRAL (app v57, the cure for Cure 6's open
+     edge — QA's build 19 retest, leg (d), and the bisect
+     verdict's C6-B): Cure 6 proved an open delete flow
+     survives a card REBUILD; it cannot survive the landing's
+     RELOAD, which takes the box and the typed password with
+     the page. So a resolution landing's reload PARKS while a
+     delete flow stands open. The signal is the one the
+     verdict proved readable at the reload instant: the
+     delete box standing in the card's DOM with content, and
+     its go control (and, on the password road, the password
+     field) present. The alternative cure — preserving the
+     typed password across the reload — was rejected in the
+     verdict: a typed password held in any storage is a
+     credential exposure, and this shape parks the navigation
+     instead of the secret. Storage writes land immediately;
+     only the reload parks; the parked resolution is COMPLETE
+     (nothing re-arms behind it — the resolution retry belongs
+     to answers that never landed, and this one landed). The
+     delete flow's own reload (runDeletion) never parks: it
+     is not a landing. When the person closes the box, no
+     retroactive reload fires — the session simply continues
+     on the landed storage, and the next natural reload or
+     boot reads the landed truth like any other. Returns true
+     when the reload fired, false when it parked. */
+  function deleteFlowOpen() {
+    var box = document.getElementById("accDeleteBox");
+    if (!box || !box.innerHTML) return false;
+    return !!document.getElementById("accDeletePw") || !!document.getElementById("accDeleteGo");
+  }
+  function reloadAfterLanding() {
+    if (deleteFlowOpen()) return false;
+    location.reload();
+    return true;
+  }
+
+  /* THE POST-LANDING CONVERGENCE RE-CHECK (app v57, the
+     F-B19-1 cure, clause 4 — the bisect verdict's Face 3-A):
+     on a cache-less device the suspect-partial arm cannot
+     speak (it judges against a cache census that does not
+     exist), so a partial answer — the profile and most
+     collections standing, one collection read empty by an
+     SDK-internal shape — adjudicates LOADED and lands as the
+     truth, and a loaded verdict owns no retry: nothing inside
+     the visit ever re-asks. The cure is ONE silent re-check:
+     when a loaded landing's own shape is the one the arm
+     could not judge (a profile standing, no device cache
+     behind the verdict, at least one collection empty, and
+     the account not provably new — a provably new account's
+     empties are its truth), the resolution re-pulls once, on
+     the house retry cadence (15 seconds, the same rhythm the
+     NOT LOADED retry keeps), and re-adjudicates. A richer
+     answer converges in through the standing landing (clause
+     1 carries it into the owner's memory with it); an answer
+     that agrees, or fails to load, moves nothing — the
+     landed state stands either way, and a truly empty
+     collection stays empty at the cost of one bounded pull.
+     The warrant is computed where the verdict is known; on
+     the first-sign-in road the landing reloads, which would
+     kill the timer, so the warrant crosses the reload in
+     session storage, keyed by uid and consumed once by the
+     adopted road's landing — or in-page, when the adoption's
+     reload parks behind an open delete flow and no second
+     page life is coming. */
+  var CONVERGENCE_RECHECK_MS = 15000;
+  var RECHECK_WARRANT_KEY = "mpConvergenceRecheck";
+  var convergenceRecheckTimer = null;
+  function recheckWarranted(docs, proof) {
+    if (!isObj(docs) || !isObj(docs.profile) || !isObj(proof)) return false;
+    if (proof.hasDeviceCache) return false;
+    if (A.provablyNewAccount(proof)) return false;
+    var counts = docsCounts(docs);
+    return A.COLLECTIONS.some(function (kind) { return (counts[kind] || 0) === 0; });
+  }
+  function recheckWarrantSet(uid) { try { sessionStorage.setItem(RECHECK_WARRANT_KEY, uid); } catch (e) {} }
+  function recheckWarrantTake(uid) {
+    try {
+      if (sessionStorage.getItem(RECHECK_WARRANT_KEY) === uid) { sessionStorage.removeItem(RECHECK_WARRANT_KEY); return true; }
+    } catch (e) {}
+    return false;
+  }
+  function scheduleConvergenceRecheck(user) {
+    if (convergenceRecheckTimer) return;
+    var uid = user.uid;
+    convergenceRecheckTimer = setTimeout(function () {
+      convergenceRecheckTimer = null;
+      if (!currentUser || currentUser.uid !== uid || currentUser.isAnonymous) return;
+      WAIT.bound(storePromise.then(function (store) { return A.pullAccount(store, uid, { source: "server" }); }), 30000).then(function (docs2) {
+        if (!currentUser || currentUser.uid !== uid) return;
+        if (A.adjudicatePull(docs2, pullProof(currentUser)) === "notLoaded") return;
+        var before = docsCounts(snapshot), after = docsCounts(docs2);
+        var richer = A.COLLECTIONS.some(function (kind) { return (after[kind] || 0) > (before[kind] || 0); });
+        if (!richer) return;
+        snapshot = docs2;
+        convergeLive(currentUser, docs2);
+      }, function () {});
+    }, CONVERGENCE_RECHECK_MS);
   }
 
   function resolveAdopted(user) {
@@ -1496,6 +1739,10 @@
            (app v55, Cure F1): set at the adjudication below and
            read at the convergence, the way pulledDocs is. */
         var censusTripped = false;
+        /* The convergence re-check's warrant for this run (app
+           v57, clause 4): set at the adjudication below and
+           read at the landing's tail, the same way. */
+        var recheckOwn = false;
         /* The resolution pull reads from the SERVER (app v50,
            Finding 2): with the Listen channel wedged the SDK used
            to answer this pull out of its offline semantics within
@@ -1532,6 +1779,7 @@
           censusTripped = verdict === "notLoaded" && censusStandVerdict(user, docs, proof, verdict) === "trip";
           if (verdict === "loaded") censusStandVerdict(user, docs, proof, verdict);
           if (verdict === "notLoaded" && !censusTripped) throw notLoadedError();
+          recheckOwn = verdict === "loaded" && !censusTripped && recheckWarranted(docs, proof);
           if (docs.profile) return docs;
           /* No profile on the server for an adopted account (app
              v50, the Finding 1 heal): the pre-v50 deferred join
@@ -1587,6 +1835,11 @@
               rerenderOpenView();
               tourRefresh();
               nameAskFlow(user, pulledDocs);
+              /* The convergence re-check arms (app v57,
+                 clause 4): this landing's own warrant, or the
+                 one the first-sign-in road left in session
+                 storage ahead of its adoption reload. */
+              if (recheckOwn || recheckWarrantTake(user.uid)) scheduleConvergenceRecheck(user);
               return dailyStamps(user, false);
             });
           }
@@ -1671,8 +1924,12 @@
               snapshot = created;
               setLive(cached);
               storage.set(A.cacheKeyFor(user.uid), JSON.stringify(cached));
+              /* App v57 (clause 1 + the reload deferral): the
+                 owner adopts the healed copy, and the reload
+                 parks like every landing's. */
+              ownerAdopt(cached);
               return dailyStamps(user, true);
-            }).then(function () { location.reload(); }), 30000);
+            }).then(function () { if (!reloadAfterLanding()) adopting = false; }), 30000);
           }
           return createProfile(store, user, gate, acctName);
         }
@@ -1681,7 +1938,20 @@
            trip never reaches the signup branch above: its
            counted shape requires a standing profile, so this
            branch is the only one a trip can land on. */
-        adopt(user, docs, censusTripped ? { suppressReconcile: true } : undefined);
+        /* The convergence re-check's warrant (app v57, clause
+           4): a loaded landing on the shape the suspect-partial
+           arm could not judge arms one silent re-pull — set
+           BEFORE the adoption, because the adoption's reload
+           would kill an in-page timer; the warrant crosses the
+           reload in session storage instead. When the reload
+           parks behind an open delete flow, the adopted road
+           never runs in this page life, so the re-check arms
+           here. A trip landing is the census stand's own
+           convergence and never arms it. */
+        var recheckWarrant = !censusTripped && recheckWarranted(docs, proof);
+        if (recheckWarrant) recheckWarrantSet(user.uid);
+        var adoptReloaded = adopt(user, docs, censusTripped ? { suppressReconcile: true } : undefined);
+        if (recheckWarrant && adoptReloaded === false) { recheckWarrantTake(user.uid); scheduleConvergenceRecheck(user); }
         return dailyStamps(user, false);
       });
     }), 30000).catch(function (e) { landNotLoaded(user); });
