@@ -96,6 +96,11 @@
     resetPassword: function (email) { return provider ? provider.resetPassword(email) : notOn(); },
     signInAnon: function () { return provider ? provider.signInAnon() : notOn(); },
     signOut: function () { return provider ? provider.signOut() : notOn(); },
+    /* The door verdict's reader, delegated like signOut above
+       (app v56, F-B17-3): a provider without the reader reads
+       ABSENT (null), never an error — the judgement it feeds
+       treats absent as "fall back to the standing witnesses". */
+    doorNewUserFor: function (uid) { return (provider && typeof provider.doorNewUserFor === "function") ? provider.doorNewUserFor(uid) : null; },
     /* Account deletion (design section 7): the fresh sign in check
        runs before the sweep, and the sign in record is deleted last.
        reauthKind tells the caller which door this account uses, so
@@ -312,6 +317,45 @@
         return provider.credential({ idToken: cred.idToken, rawNonce: cred.nonce });
       });
     }
+    /* The door's own newness verdict (app v56, F-B17-3 — QA's
+       corrected build 17 retest verdict, 7edcd78b, and the witness
+       assessment, ~/smoke/f-b17-3-assessment.md): every door below
+       resolves a Firebase credential whose additionalUserInfo
+       carries the backend's own answer to "did THIS sign in create
+       the account" (isNewUser), and until this round the doors kept
+       only the credential's user and discarded the verdict. The
+       provably new judgement's timestamp witnesses cannot replace
+       it: Firebase does not move the Auth record's last sign in
+       stamp across an account's early sign ins, so at about a
+       minute old the creation and last sign in stamps read equal
+       and a RETURNING young account is indistinguishable from a
+       newborn by stamps alone. The flag owes nothing to
+       timestamps. It is captured at the six door endings below
+       into this session-scoped record — never written to any
+       storage; it lives and dies with the page session, which is
+       precisely the span a fresh context's trap is staged in —
+       and read by the sync glue's pullProof through doorNewUserFor
+       on the provider. NAMED DEPENDENCY: on the native roads the
+       carrier is the JS signInWithCredential result, NOT the
+       plugin's own result, and that stands on the standing
+       skipNativeAuth: true config (the plugin runs the provider
+       sheet only and never signs in to Firebase, so the JS call
+       is the first and only Firebase sign in of the assertion and
+       its flag is the true verdict); if that config ever flips,
+       the native flag must be re-proven before it is trusted. A
+       result carrying no boolean flag records a null verdict for
+       its uid — a door event happened but carried no verdict,
+       which is ABSENT for the judgement, and it supersedes any
+       older record for the same uid rather than leaving a stale
+       verdict standing. The anonymous door never captures: demo
+       sessions never reach the judgement the flag feeds. */
+    var doorNewUser = null; /* { uid: string, isNew: boolean|null } */
+    function noteDoorResult(r) {
+      if (!r || !r.user || !r.user.uid) return;
+      var info = r.additionalUserInfo;
+      var v = (info && typeof info.isNewUser === "boolean") ? info.isNewUser : null;
+      doorNewUser = { uid: r.user.uid, isNew: v };
+    }
     var p = {
       currentUser: null,
       ready: ensureApp(),
@@ -337,16 +381,16 @@
       signInGoogle: function () {
         var plug = nativeAuthPlugin();
         if (plug) {
-          return ensureApp().then(function (ctx) { return googleCredential(ctx, plug).then(function (cred) { return boundWait(ctx.auth.signInWithCredential(cred), 30000); }); }).then(function (r) { return normUser(r.user); });
+          return ensureApp().then(function (ctx) { return googleCredential(ctx, plug).then(function (cred) { return boundWait(ctx.auth.signInWithCredential(cred), 30000); }); }).then(function (r) { noteDoorResult(r); return normUser(r.user); });
         }
-        return ensureApp().then(function (ctx) { return ctx.auth.signInWithPopup(new ctx.fb.auth.GoogleAuthProvider()); }).then(function (r) { return normUser(r.user); });
+        return ensureApp().then(function (ctx) { return ctx.auth.signInWithPopup(new ctx.fb.auth.GoogleAuthProvider()); }).then(function (r) { noteDoorResult(r); return normUser(r.user); });
       },
       signInApple: function () {
         var plug = nativeAuthPlugin();
         if (plug) {
-          return ensureApp().then(function (ctx) { return appleCredential(ctx, plug).then(function (cred) { return boundWait(ctx.auth.signInWithCredential(cred), 30000); }); }).then(function (r) { return normUser(r.user); });
+          return ensureApp().then(function (ctx) { return appleCredential(ctx, plug).then(function (cred) { return boundWait(ctx.auth.signInWithCredential(cred), 30000); }); }).then(function (r) { noteDoorResult(r); return normUser(r.user); });
         }
-        return ensureApp().then(function (ctx) { return ctx.auth.signInWithPopup(new ctx.fb.auth.OAuthProvider("apple.com")); }).then(function (r) { return normUser(r.user); });
+        return ensureApp().then(function (ctx) { return ctx.auth.signInWithPopup(new ctx.fb.auth.OAuthProvider("apple.com")); }).then(function (r) { noteDoorResult(r); return normUser(r.user); });
       },
       /* U4 (app v49): the JS auth network calls race a 30 second
          bound. The timeout error rides the rejection path each
@@ -356,10 +400,11 @@
          a refusal. The web popup doors are NOT raced: closing the
          popup is the user's own exit and already rejects. */
       signInEmail: function (email, password) {
-        return ensureApp().then(function (ctx) { return boundWait(ctx.auth.signInWithEmailAndPassword(email, password), 30000); }).then(function (r) { return normUser(r.user); });
+        return ensureApp().then(function (ctx) { return boundWait(ctx.auth.signInWithEmailAndPassword(email, password), 30000); }).then(function (r) { noteDoorResult(r); return normUser(r.user); });
       },
       signUpEmail: function (email, password, name) {
         return ensureApp().then(function (ctx) { return boundWait(ctx.auth.createUserWithEmailAndPassword(email, password), 30000); }).then(function (r) {
+          noteDoorResult(r);
           var nm = typeof name === "string" ? name.trim() : "";
           if (nm && r.user) return boundWait(r.user.updateProfile({ displayName: nm }), 30000).then(function () { return normUser(r.user); });
           return normUser(r.user);
@@ -378,7 +423,20 @@
       signInAnon: function () {
         return ensureApp().then(function (ctx) { return boundWait(ctx.auth.signInAnonymously(), 30000); }).then(function (r) { return normUser(r.user); });
       },
+      /* The door verdict's reader (app v56, F-B17-3 — see
+         noteDoorResult above): this page session's verdict for
+         exactly this uid — true, false, or null (absent: no door
+         event this session, or the event carried no verdict, or
+         the record names another account). Per-uid by
+         construction: one account's verdict never speaks for
+         another. */
+      doorNewUserFor: function (uid) {
+        return (doorNewUser && doorNewUser.uid === uid) ? doorNewUser.isNew : null;
+      },
       signOut: function () {
+        /* The door verdict dies with the session that earned it
+           (app v56, F-B17-3). */
+        doorNewUser = null;
         /* Inside the package the native layer holds its own session
            (app v39): sign it out first, best effort — a native sign
            out failure never blocks the web sign out below. On the

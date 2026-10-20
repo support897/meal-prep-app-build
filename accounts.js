@@ -450,11 +450,35 @@
      cached this account's copy before has seen an account with a
      past, however fresh the stamp looks. The creation stamp itself
      is the Auth record's own metadata (see accountAnchorMs below),
-     never a client written field. */
+     never a client written field.
+     App v56 (F-B17-3 — QA's corrected build 17 retest verdict,
+     7edcd78b, and the witness assessment,
+     ~/smoke/f-b17-3-assessment.md) adds the THIRD witness, and it
+     relieves Cure 3's second arm of a burden it provably cannot
+     carry: Firebase does not move the last sign in stamp across
+     an account's early sign ins (at about a minute old the two
+     stamps read EQUAL, in the page and at REST, after a second
+     sign in), so inside the first minutes the stamp arm is blind
+     in exactly the window the trap hunts in. The third witness
+     is the door's own verdict: the sign in result this session's
+     door actually resolved carries the backend's newness flag
+     (additionalUserInfo.isNewUser, captured by auth.js at every
+     door ending and carried on the proof as doorIsNewUser). A
+     FALSE flag — this session's sign in did NOT create the
+     account — refutes newness outright, at any age and any skew:
+     the account the door just signed in already existed. The
+     flag's power is one-directional by design: a TRUE flag earns
+     nothing alone (the standing witnesses still decide — the
+     flag is a door event fact, not an account fact), and an
+     ABSENT flag (no door verdict this session, the restored
+     session's shape) falls back to the standing witnesses
+     unchanged; the assessment names the one residual road that
+     fallback leaves, and its data-safe cost. */
   var NEW_ACCOUNT_WINDOW_MS = 10 * 60 * 1000;
   function provablyNewAccount(proof) {
     proof = isPlainObj(proof) ? proof : {};
     if (proof.hasDeviceCache) return false;
+    if (proof.doorIsNewUser === false) return false;
     var created = proof.authCreatedAtMs;
     if (typeof created !== "number" || !isFinite(created)) return false;
     var lastIn = proof.authLastSignInAtMs;

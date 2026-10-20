@@ -973,12 +973,18 @@
      cache copy for the uid, and (app v54) that copy's collection
      census for the suspect-partial arm (Cure 1) plus the Auth
      record's last sign in stamp for the provably new judgement's
-     second witness (Cure 3). */
+     second witness (Cure 3). App v56 (F-B17-3) adds the provably
+     new judgement's third witness at the literal's end: this
+     session's door verdict (auth.js's doorNewUserFor — the sign
+     in result's own newness flag, granularity free where the
+     last sign in stamp is not), read behind a typeof guard
+     because a surface without the reader (the test harness's
+     stubs) must read ABSENT and keep its standing verdicts. */
   function pullProof(user) {
     var raw = storage.get(A.cacheKeyFor(user.uid));
     var hasCache = false, cacheCounts = null;
     if (raw) { try { var c = JSON.parse(raw); hasCache = !!c && typeof c === "object" && !Array.isArray(c); if (hasCache) cacheCounts = stateCounts(c); } catch (e) {} }
-    return { authCreatedAtMs: A.accountAnchorMs(user), authLastSignInAtMs: A.accountLastSignInMs(user), hasDeviceCache: hasCache, cacheCounts: cacheCounts, nowMs: Date.now() };
+    return { authCreatedAtMs: A.accountAnchorMs(user), authLastSignInAtMs: A.accountLastSignInMs(user), hasDeviceCache: hasCache, cacheCounts: cacheCounts, nowMs: Date.now(), doorIsNewUser: (window.MP_AUTH && typeof window.MP_AUTH.doorNewUserFor === "function") ? window.MP_AUTH.doorNewUserFor(user.uid) : null };
   }
   /* THE BOUNDED CENSUS STAND (app v55, Cure F1 — QA's build 17
      retest, verdict-mealprep-b17-retest.md, Finding F-B17-1,
