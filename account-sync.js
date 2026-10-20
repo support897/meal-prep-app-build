@@ -442,6 +442,30 @@
        completion replaces the snapshot with the documents it
        landed, name included, so the card's reads (the snapshot
        name, else the sign in record's) stay true. */
+    /* The name ALSO rides through the state owner (app v53,
+       QA's build 15 nameflow bisect,
+       verdict-mealprep-b15-nameflow-bisect.md — the verdict
+       that proved the remaining fault at the byte level):
+       the live key has two writers — this
+       layer's stored copy, written above, and app.js's own
+       in-memory state, whose save() serialises that whole
+       object over the key on every save. The bisect's trail:
+       the answer stood in storage at +0.2 s; the tour walk's
+       first step saved at +1.6 s and wrote the owner's
+       name-less copy over it; and the push — composing at
+       fire time from the stored copy, inside its 2 second
+       debounce — read the clobbered value and wrote nothing.
+       The control arm, its walk delayed past the window,
+       landed the name, which is how the fault hid. So the
+       name takes the road guideState has always taken
+       through bumpNameAsks below: the owner's copy carries
+       it from this moment, no save inside any window can
+       write it away, and the owner's save (which fires the
+       hook below through app.js's own save path) keeps the
+       two copies agreeing. With no tour standing (the seam
+       absent), the stored write above stands exactly as
+       it always has. */
+    if (window.MP_TOUR && window.MP_TOUR.setAccountName) window.MP_TOUR.setAccountName(nm);
     if (window.MP_ACCOUNT_HOOK && window.MP_ACCOUNT_HOOK.onSave) window.MP_ACCOUNT_HOOK.onSave();
     window.MP_AUTH.setDisplayName(nm).then(function () {}, function () {});
   }

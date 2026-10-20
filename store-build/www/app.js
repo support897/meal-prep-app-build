@@ -1879,6 +1879,22 @@
     bumpNameAsks: function (n, visit) {
       state.guideState = Object.assign({}, state.guideState, { nameAsks: n, nameAskVisit: visit, v: 2 });
       save();
+    },
+    /* The answered name is written HERE, by the state owner, for
+       the same reason (app v53, QA's build 15 nameflow bisect,
+       verdict-mealprep-b15-nameflow-bisect.md): this object is
+       the copy save() serialises over the live key on every
+       save, so a name the accounts layer wrote into the stored
+       copy alone was overwritten by the tour's own next save
+       inside the push's debounce window, and the push composed
+       from the clobbered copy and wrote nothing — the name
+       never left the device. Carrying the name on this copy
+       from the answering moment means no later save can write
+       it away; the accounts layer routes the answer through
+       here, as the ask count already rides. */
+    setAccountName: function (nm) {
+      state.accountName = nm;
+      save();
     }
   };
   /* The accounts layer's landing hook (app v50, QA build 12
