@@ -428,7 +428,20 @@
   function saveName(user, nm) {
     var st = liveState();
     if (st) { st.accountName = nm; setLive(st); }
-    if (snapshot && snapshot.profile) snapshot.profile.name = nm;
+    /* The snapshot is NOT pre-written with the name (app v52,
+       QA's build 14 retest, Leg D): the snapshot is the push's
+       diff baseline, and writing the answer into it here
+       starved pushAccount's docEq — the profile built from the
+       working copy compared equal to the baseline on the name,
+       the profile write never fired, and the name reached the
+       server only when an unrelated change later forced the
+       write (QA: it landed in one of three answering arms).
+       The working copy above carries the name from this moment;
+       the push the hook schedules now SEES the change against
+       the untouched baseline and writes it, and the push's own
+       completion replaces the snapshot with the documents it
+       landed, name included, so the card's reads (the snapshot
+       name, else the sign in record's) stay true. */
     if (window.MP_ACCOUNT_HOOK && window.MP_ACCOUNT_HOOK.onSave) window.MP_ACCOUNT_HOOK.onSave();
     window.MP_AUTH.setDisplayName(nm).then(function () {}, function () {});
   }
@@ -777,6 +790,27 @@
   var NOT_LOADED_CODE = "mp/not-loaded";
   function notLoadedError() { var e = new Error(NOT_LOADED_CODE); e.code = NOT_LOADED_CODE; return e; }
   function isNotLoaded(e) { return !!e && e.code === NOT_LOADED_CODE; }
+  /* The unavailable class (app v52, QA's build 14 retest and
+     the F2 bisect, verdict-mealprep-b14-f2-bisect.md): under the
+     Listen wedge the resolution pull neither pends nor resolves
+     empty — it REJECTS, about ten seconds in, with the
+     Firestore error code "unavailable" ("Failed to get document
+     because the client is offline."). That class is neither the
+     bound's timeout nor the adjudication's not loaded, so the
+     terminal catches used to take their bare fallback on it: the
+     card rendered, no honest line stood, and no retry was ever
+     armed — the session sat in its local empty state forever,
+     through the heal and past every would be retry interval.
+     The class is named here, beside the not loaded class it now
+     joins: a rejection belongs to it when its code is
+     "unavailable", or when its words are the SDK's offline
+     words. Its treatment is landNotLoaded, at the catches below
+     and at the visibility refresh's rejection arm. */
+  function isUnavailable(e) {
+    if (!e) return false;
+    if (e.code === "unavailable") return true;
+    return typeof e.message === "string" && e.message.indexOf("client is offline") !== -1;
+  }
   /* The adjudication's proof, from this device and this session:
      the account's Auth creation stamp (never a client written
      field) and whether this device already holds a per account
@@ -812,6 +846,21 @@
       resolveSignedIn(currentUser);
     }, 15000);
   }
+  /* The tour re-render (app v52, QA's build 14 retest, Leg D):
+     the tour can already stand open when a sign in lands (the
+     app loads before the session resolves), drawn as the
+     welcome variant from a moment when no session existed to
+     ask the name of. app.js stands the re-render hook for
+     exactly this (MP_TOUR.refresh, whose own comment names this
+     layer as its caller) and until this build it had NO caller,
+     so stop 1 never became the name stop on a first run. Every
+     sign in landing below asks for the re-render; the tour
+     itself decides what stop 1 shows (the name stop only when
+     this file's hook says it applies), and a closed tour is
+     left closed by the hook itself. */
+  function tourRefresh() {
+    if (window.MP_TOUR && window.MP_TOUR.refresh) window.MP_TOUR.refresh();
+  }
   /* The NOT LOADED landing, shared by both resolution roads: the
      card renders from the session alone (its local truth — the
      empty answer was adopted over NOTHING), the honest line
@@ -820,6 +869,7 @@
     renderSignedIn(user, {});
     slowLoadLine();
     scheduleResolutionRetry(user);
+    tourRefresh();
   }
 
   document.addEventListener("visibilitychange", function () {
@@ -836,7 +886,14 @@
        wedge resolves even a server source read EMPTY, and an
        empty answer is never adopted over the working copy — the
        refresh simply does not land, and the session keeps its
-       truth until a loaded answer exists. */
+       truth until a loaded answer exists. (App v52: the same
+       wedge also REJECTS this pull in the unavailable class —
+       the F2 bisect's named mechanism — and a rejected refresh
+       used to die in the silent swallow below, its session
+       keeping an unlanded truth with no word spoken and nothing
+       re-asked; the rejection arm now gives that one class the
+       not loaded treatment, and every other refusal keeps the
+       swallow it has always had.) */
     WAIT.bound(storePromise.then(function (store) { return A.pullAccount(store, uid, { source: "server" }); }), 30000).then(function (docs) {
       if (A.adjudicatePull(docs, pullProof(currentUser)) === "notLoaded") return;
       if (JSON.stringify(docs) !== JSON.stringify(snapshot)) {
@@ -846,7 +903,9 @@
         storage.set(A.cacheKeyFor(uid), JSON.stringify(pulledState));
         location.reload();
       }
-    }, function () {});
+    }, function (e) {
+      if (isUnavailable(e) && currentUser && !currentUser.isAnonymous) { slowLoadLine(); scheduleResolutionRetry(currentUser); }
+    });
   });
 
   /* ---------------- sign in adoption ---------------- */
@@ -1075,13 +1134,14 @@
               if (window.MP_PAYMENTS && window.MP_PAYMENTS.enabled()) window.MP_PAYMENTS.refresh(user.uid);
               renderSignedIn(user, {});
               rerenderOpenView();
+              tourRefresh();
               nameAskFlow(user, pulledDocs);
               return dailyStamps(user, false);
             });
           }
         });
       }), 30000).catch(function (e) {
-        if (isNotLoaded(e)) { landNotLoaded(user); return; }
+        if (isNotLoaded(e) || isUnavailable(e)) { landNotLoaded(user); return; }
         renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine();
       });
   }
@@ -1151,7 +1211,7 @@
         return dailyStamps(user, false);
       });
     }), 30000).catch(function (e) {
-      if (isNotLoaded(e)) { landNotLoaded(user); return; }
+      if (isNotLoaded(e) || isUnavailable(e)) { landNotLoaded(user); return; }
       renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine();
     });
   }
