@@ -903,6 +903,23 @@
     counts.imports = Array.isArray(st.imports) ? st.imports.length : 0;
     return counts;
   }
+  /* The plain object test the census stand reads shapes with
+     (the engine's own test, restated for the glue — accounts.js
+     does not export it, and this round does not touch the
+     engine), and the PULLED answer's own census (app v55, Cure
+     F1): the identical vector the adjudicator compares against
+     the proof's cache census, counted off the documents the
+     pull resolved with, kind by kind in the engine's order. */
+  function isObj(x) { return !!x && typeof x === "object" && !Array.isArray(x); }
+  function docsCounts(docs) {
+    var counts = {};
+    var cols = isObj(docs) && isObj(docs.collections) ? docs.collections : {};
+    A.COLLECTIONS.forEach(function (kind) {
+      var bag = cols[kind];
+      counts[kind] = isObj(bag) ? Object.keys(bag).length : 0;
+    });
+    return counts;
+  }
   /* The item identity the reconciliations union by: an item's own
      id where it carries one, else its import key, else its whole
      shape (events ride positionally in the docs, so shape is
@@ -962,6 +979,73 @@
     var hasCache = false, cacheCounts = null;
     if (raw) { try { var c = JSON.parse(raw); hasCache = !!c && typeof c === "object" && !Array.isArray(c); if (hasCache) cacheCounts = stateCounts(c); } catch (e) {} }
     return { authCreatedAtMs: A.accountAnchorMs(user), authLastSignInAtMs: A.accountLastSignInMs(user), hasDeviceCache: hasCache, cacheCounts: cacheCounts, nowMs: Date.now() };
+  }
+  /* THE BOUNDED CENSUS STAND (app v55, Cure F1 — QA's build 17
+     retest, verdict-mealprep-b17-retest.md, Finding F-B17-1,
+     caught live in their census2 leg; the design and its proofs
+     stand in ~/smoke/b17-bisect-verdict.md, Part 2): Cure 1's
+     suspect-partial arm judges a pull poorer than the device
+     cache's census NOT LOADED, and the judge is pure — the same
+     pair re-judges identically forever (the Test chair's
+     determinism, confirmed at function level on the shipped
+     bytes). A LEGITIMATE deletion made on another device leaves
+     this device's stash richer than the server for good, so the
+     arm became a deadlock: the session never landed on this
+     device, on an honest channel, the honest line its only
+     word. The bound lives here, in the landing layer, not in
+     the judge (adjudicatePull stays pure — the seam ruling,
+     Test and QA pair-converged): a census-shaped NOT LOADED
+     verdict (a standing profile, a non-empty answer, a cache
+     census to judge against) is counted by its census PAIR —
+     the pulled census against the proof's cache census, keyed
+     with the uid — one count per resolution run, a changed pair
+     restarting at one, and any loaded verdict, a sign out, or
+     the trip itself clearing the stand. At the bound (four
+     identical verdicts: the first answer and three retry
+     cycles, about 45 seconds at the standing cadence — inside
+     the heal envelope QA's legs already score) the stand TRIPS:
+     the pulled documents are treated as loaded WITHOUT
+     reconciliation (the trip landings in adopt and convergeLive
+     below), because the server is canonical and a stable
+     richer stash is a deletion to honour, not a partial answer
+     to fear. The trip landing writes nothing, and the cache
+     write inside each landing refreshes the stash from the
+     landed truth, so the deadlock cannot re-form for that
+     deletion and the deleted item stays deleted. Stability
+     alone cannot tell a systematic lie from a deletion (the
+     bisect's D-3: the two evidences are the same pair, and no
+     seam carries provenance), so the worst case is named, not
+     hidden: a channel lying identically forever lands the
+     session on the server's ANSWERED set — the hidden items
+     absent from this device's copy until a richer pull lands
+     them, the server itself untouched, no delete able to
+     compose from an answered snapshot. Bounded visibility on
+     one device, against the proven permanent lockout. Below the
+     bound, every suspect-partial verdict keeps the NOT LOADED
+     treatment exactly, and the fluctuating wedge never trips
+     the stand at all (its lie is a per-pull lottery: no two
+     consecutive pairs are identical). The visibility refresh
+     never counts: it is not a resolution run, and the deadlock
+     is a resolution shape. */
+  var censusStand = null, resolutionRunSeq = 0;
+  var CENSUS_STAND_BOUND = 4;
+  function censusStandVerdict(user, docs, proof, verdict) {
+    if (verdict === "loaded") { censusStand = null; return "clear"; }
+    /* Only the census shape counts: the empty answer stands are
+       the age and cache arms' own country, whose verdicts the
+       bound does not govern — asserted by shape here, not
+       assumed: with a profile standing, a non-empty answer and
+       a cache census, a NOT LOADED verdict can only have failed
+       the census arm. */
+    if (!isObj(docs) || !isObj(docs.profile) || A.docsAreEmpty(docs) || !isObj(proof) || !isObj(proof.cacheCounts)) return "stand";
+    /* One count per resolution run, however the run is shaped:
+       this run's sequence against the stand's last counted run. */
+    if (censusStand && censusStand.runId >= resolutionRunSeq) return "stand";
+    var key = user.uid + "|" + JSON.stringify(docsCounts(docs)) + "|" + JSON.stringify(proof.cacheCounts);
+    if (censusStand && censusStand.key === key) { censusStand.count++; censusStand.runId = resolutionRunSeq; }
+    else censusStand = { key: key, count: 1, runId: resolutionRunSeq };
+    if (censusStand.count >= CENSUS_STAND_BOUND) { censusStand = null; return "trip"; }
+    return "stand";
   }
   /* The retry: one timer at most, for one uid, re-running the
      whole resolution (the same server source pull and the chain
@@ -1059,7 +1143,7 @@
   });
 
   /* ---------------- sign in adoption ---------------- */
-  function adopt(user, docs) {
+  function adopt(user, docs, opts) {
     adopting = true;
     var pulled = A.docsToState(docs);
     snapshot = docs;
@@ -1072,8 +1156,14 @@
        reconcileWithCache): the live key and the cache take the
        pulled state carrying anything the device's cached copy
        holds that the pull lacks, while the snapshot above stays
-       the pulled documents alone. */
-    var landedState = reconcileWithCache(user.uid, pulled.state);
+       the pulled documents alone. A census stand trip (app v55,
+       Cure F1) lands UNRECONCILED instead: reconciliation is
+       precisely what would carry the honourably deleted item
+       back in, so the pulled state lands as it stands — and the
+       cache write below stores that same pulled state, which
+       refreshes the stash to the server's truth and ends the
+       deadlock for that deletion. */
+    var landedState = (opts && opts.suppressReconcile) ? pulled.state : reconcileWithCache(user.uid, pulled.state);
     setLive(landedState);
     storage.set(A.cacheKeyFor(user.uid), JSON.stringify(landedState));
     device.uid = user.uid; device.adoptedUid = user.uid; saveDevice();
@@ -1179,7 +1269,28 @@
       device.uid = user.uid; device.adoptedUid = user.uid; device.pendingImportUid = user.uid; saveDevice();
       var startBlank = blankState();
       startBlank.accountName = acctName;
-      return reloadOnTimeout(A.pushAccount(store, user.uid, startBlank, null, nowIso()).then(function (created) {
+      /* The create chain races the shared bound DIRECTLY (app
+         v55, Cure F2-a — QA's build 17 retest, Finding F-B17-2,
+         and the b17 bisect verdict's B2a-3: this chain used to
+         ride reloadOnTimeout, whose reload fired DETACHED when
+         its own 30 seconds expired — in the instant pull shape
+         (the pull answering empty at once, the create writes
+         pending) that instant was the same one in which the
+         resolution's own bound landed the session NOT LOADED:
+         the reload discarded the honest line and the armed
+         retry before either could be witnessed, and the whole
+         cycle re-fired every 30 seconds, forever. The pend now
+         belongs to the resolution's bound and retry, which own
+         this chain's caller end to end: the bound lands the
+         line, the retry re-runs the whole resolution — this
+         create included — on its cadence until the channel
+         answers. The race that remains is benign and is named:
+         a pended create push may still land late at the server;
+         it composes a blank start against a null baseline (the
+         create arm — no deletes), a retry's second create is
+         the same shape, and the landed snapshot governs what
+         the session composes against from there.) */
+      return WAIT.bound(A.pushAccount(store, user.uid, startBlank, null, nowIso()).then(function (created) {
         snapshot = created;
         /* The account starts empty on screen too: the pot waits
            in the guest cache, one tap from the Account card. What
@@ -1191,11 +1302,14 @@
         setLive(startBlank);
         storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startBlank));
         return dailyStamps(user, true);
-      }).then(function () { location.reload(); }));
+      }).then(function () { location.reload(); }), 30000);
     }
     var startState = blankState();
     startState.accountName = acctName;
-    return reloadOnTimeout(A.pushAccount(store, user.uid, startState, null, nowIso()).then(function (created) {
+    /* The shared bound directly, not the detached reload (app
+       v55, Cure F2-a — see the offer road above): a pended
+       create belongs to the resolution's bound and retry. */
+    return WAIT.bound(A.pushAccount(store, user.uid, startState, null, nowIso()).then(function (created) {
       snapshot = created;
       /* The window merge (Cure 5): re-read the working copy,
          carry its additions into the start state, and land THAT
@@ -1216,7 +1330,7 @@
         snapshot = next;
         return dailyStamps(user, true);
       });
-    }).then(function () { location.reload(); }));
+    }).then(function () { location.reload(); }), 30000);
   }
 
   /* U5's honest line (app v49): the line lands on the Account
@@ -1245,9 +1359,12 @@
     currentUser = user;
     if (!user) {
       /* The adjudication retry dies with the session (app v51),
-         and the session anchor goes with it. */
+         and the session anchor goes with it. The census stand
+         dies too (app v55, Cure F1): a counted stand belongs to
+         the signed in session that formed it. */
       stopResolutionRetry();
       sessionAnchorMs = null;
+      censusStand = null;
       var notice = storage.get("mealPrepNotice");
       if (notice) storage.remove("mealPrepNotice");
       renderSignedOut(notice || "");
@@ -1283,6 +1400,10 @@
      as onUser always has, and it takes the session's anchor from
      the Auth record on every run. */
   function resolveSignedIn(user) {
+    /* Every run takes the next sequence number (app v55, Cure
+       F1): the census stand counts verdicts by runs, and this is
+       what makes one count per run structural. */
+    resolutionRunSeq++;
     sessionAnchorMs = A.accountAnchorMs(user);
     if (device.adoptedUid === user.uid && device.uid === user.uid) { resolveAdopted(user); return; }
     resolveFirst(user);
@@ -1310,8 +1431,23 @@
      No reload is added: the landing's own render and the open
      view's re-render (rerenderOpenView, in the chain below)
      show what landed. */
-  function convergeLive(user, docs) {
+  function convergeLive(user, docs, opts) {
     var pulledState = A.docsToState(docs).state;
+    /* A census stand trip (app v55, Cure F1) lands the pulled
+       truth UNCONDITIONALLY and unreconciled: the loss
+       direction test below guards a working copy that may hold
+       the person's newer truth, but a never-landed stand's live
+       copy is the signed out or local one — the server's truth
+       is canonical for this landing — and reconciliation would
+       carry the honourably deleted item back in. The setLive
+       and the cache write are the landing's own, so snapshot,
+       live and stash agree on the pulled documents and the
+       deadlock cannot re-form for that deletion. */
+    if (opts && opts.suppressReconcile) {
+      setLive(pulledState);
+      try { storage.set(A.cacheKeyFor(user.uid), JSON.stringify(pulledState)); } catch (e) {}
+      return;
+    }
     var live = liveState();
     var want = stateCounts(pulledState);
     var have = stateCounts(live);
@@ -1350,6 +1486,10 @@
          dead end any more.) */
       WAIT.bound(storePromise.then(function (store) {
         var pulledDocs = null;
+        /* Whether this run's answer tripped the census stand
+           (app v55, Cure F1): set at the adjudication below and
+           read at the convergence, the way pulledDocs is. */
+        var censusTripped = false;
         /* The resolution pull reads from the SERVER (app v50,
            Finding 2): with the Listen channel wedged the SDK used
            to answer this pull out of its offline semantics within
@@ -1373,7 +1513,19 @@
              NOT LOADED treatment (app v54, Cure 4) stands the
              line on the first pull and arms the retry — no catch
              wired only to a timeout can ever see this class. */
-          if (A.adjudicatePull(docs, pullProof(user)) === "notLoaded") throw notLoadedError();
+          /* The verdict is routed through the census stand (app
+             v55, Cure F1, censusStandVerdict above): a loaded
+             verdict clears any stand this session was holding,
+             and a census-shaped NOT LOADED verdict below the
+             bound throws to the terminal catch exactly as it
+             always has — but at the bound the stand trips, and
+             this answer is treated as loaded, unreconciled, at
+             the convergence below. */
+          var proof = pullProof(user);
+          var verdict = A.adjudicatePull(docs, proof);
+          censusTripped = verdict === "notLoaded" && censusStandVerdict(user, docs, proof, verdict) === "trip";
+          if (verdict === "loaded") censusStandVerdict(user, docs, proof, verdict);
+          if (verdict === "notLoaded" && !censusTripped) throw notLoadedError();
           if (docs.profile) return docs;
           /* No profile on the server for an adopted account (app
              v50, the Finding 1 heal): the pre-v50 deferred join
@@ -1395,8 +1547,10 @@
           /* The convergence (app v54, Cure 2, convergeLive
              above): the loaded pull lands in the working copy
              wherever the copy stands poorer, before the tier,
-             the record or any later push can read the split. */
-          convergeLive(user, docs);
+             the record or any later push can read the split. A
+             census stand trip (app v55, Cure F1) converges
+             unconditionally and unreconciled instead. */
+          convergeLive(user, docs, censusTripped ? { suppressReconcile: true } : undefined);
           return A.syncTier(store, user.uid, { demo: false, source: "server" });
         }).then(function (t) {
           if (t) {
@@ -1440,6 +1594,10 @@
        (app v49, U5), and its terminal catch takes the same NOT
        LOADED treatment as every non-loaded landing (app v54,
        Cure 4 — see the catch at resolveAdopted's tail). */
+    /* Whether this run's answer tripped the census stand (app
+       v55, Cure F1): set at the adjudication below and read at
+       the standing account branch's adoption. */
+    var censusTripped = false;
     WAIT.bound(storePromise.then(function (store) {
       /* The server source again (app v50, Finding 2): a signup
          decision made on an offline empty answer would create a
@@ -1449,7 +1607,18 @@
          source read empty, and createProfile never fires off an
          unadjudicated answer.) */
       return A.pullAccount(store, user.uid, { source: "server" }).then(function (docs) {
-        if (A.adjudicatePull(docs, pullProof(user)) === "notLoaded") throw notLoadedError();
+        /* The verdict is routed through the census stand (app
+           v55, Cure F1, censusStandVerdict above), as on the
+           adopted road: below the bound a NOT LOADED verdict
+           throws to the terminal catch exactly as it always has;
+           at the bound the stand trips and this answer is
+           treated as loaded, unreconciled, at the adoption
+           below. A loaded verdict clears any stand. */
+        var proof = pullProof(user);
+        var verdict = A.adjudicatePull(docs, proof);
+        censusTripped = verdict === "notLoaded" && censusStandVerdict(user, docs, proof, verdict) === "trip";
+        if (verdict === "loaded") censusStandVerdict(user, docs, proof, verdict);
+        if (verdict === "notLoaded" && !censusTripped) throw notLoadedError();
         var pot = liveState();
         var gate = A.importGate({ profile: docs.profile, potState: pot, docs: docs, deviceConsumed: device.guestPotConsumed });
         var isSignup = !docs.profile;
@@ -1488,16 +1657,25 @@
             device.uid = user.uid; device.adoptedUid = user.uid;
             if (device.pendingJoinUid) device.pendingJoinUid = null;
             saveDevice();
-            return reloadOnTimeout(A.pushAccount(store, user.uid, cached, null, nowIso()).then(function (created) {
+            /* The shared bound directly, not the detached
+               reload (app v55, Cure F2-a — see createProfile's
+               offer road): a pended heal push belongs to the
+               resolution's bound and retry, like the creates. */
+            return WAIT.bound(A.pushAccount(store, user.uid, cached, null, nowIso()).then(function (created) {
               snapshot = created;
               setLive(cached);
               storage.set(A.cacheKeyFor(user.uid), JSON.stringify(cached));
               return dailyStamps(user, true);
-            }).then(function () { location.reload(); }));
+            }).then(function () { location.reload(); }), 30000);
           }
           return createProfile(store, user, gate, acctName);
         }
-        adopt(user, docs);
+        /* A census stand trip (app v55, Cure F1) adopts
+           unreconciled, like the adopted road's convergence. A
+           trip never reaches the signup branch above: its
+           counted shape requires a standing profile, so this
+           branch is the only one a trip can land on. */
+        adopt(user, docs, censusTripped ? { suppressReconcile: true } : undefined);
         return dailyStamps(user, false);
       });
     }), 30000).catch(function (e) { landNotLoaded(user); });
@@ -1535,7 +1713,13 @@
      anyway and the sign in resolution on the other side reads
      the truth. Any other rejection keeps the behaviour it always
      had: the bound adds duration handling beside the settle
-     handling, never instead of it. */
+     handling, never instead of it. (App v55, Cure F2-a: from
+     this build only the demo entry rides this wrapper — the
+     create and legacy heal chains race the shared bound
+     directly at their sites, because their pend belongs to a
+     resolution that carries its own bound and retry; the demo
+     road's local state IS consistent when its chain runs, so
+     the U6 premise holds here exactly as written.) */
   function reloadOnTimeout(promise) {
     return WAIT.bound(promise, 30000).then(function (v) { return v; }, function (e) {
       if (WAIT.isTimeout(e)) { location.reload(); return undefined; }
