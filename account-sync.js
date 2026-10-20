@@ -381,6 +381,23 @@
         "<button class='pillBtn danger' id='accDeleteStart'>" + t("account.deleteTitle") + "</button></div>" +
         "<div id='accDeleteBox'></div>";
     }
+    /* The delete box survives this rebuild (app v54, Cure 6 —
+       QA's night verdict on build 16, Finding N3; the night
+       bisect's F3 scenario proved the mechanism): the confirm
+       box stands open BELOW this card's own markup, and a
+       resolution landing that re-renders the card mid flow (a
+       retry landing, a refresh) used to destroy it silently —
+       the rebuilt card carried an empty box and the password
+       the person had typed died with the old elements, the tap
+       on Delete then doing nothing at all. So an open box is
+       captured before the rebuild (its markup and the typed
+       password) and restored into the rebuilt box below, wired
+       live through wireDeleteConfirm. A closed box captures
+       nothing, and idle renders are untouched. */
+    var delBoxWas = document.getElementById("accDeleteBox");
+    var delOpenHtml = delBoxWas && delBoxWas.innerHTML ? delBoxWas.innerHTML : "";
+    var delPwWas = null;
+    if (delOpenHtml) { var delPwEl = document.getElementById("accDeletePw"); delPwWas = delPwEl ? delPwEl.value : null; }
     body.innerHTML = html;
     var nameEdit = document.getElementById("accNameEdit");
     if (nameEdit) nameEdit.addEventListener("click", function () { renderNameEdit(user); });
@@ -399,6 +416,19 @@
     if (imp) imp.addEventListener("click", function () { doImport(user).catch(function () {}); });
     var impNo = document.getElementById("accImportNo");
     if (impNo) impNo.addEventListener("click", function () { device.importDeclinedFor = user.uid; saveDevice(); renderSignedIn(user, {}); });
+    /* The delete box's restoration (app v54, Cure 6, the capture
+       above): the box stands open again with what the person
+       typed still in its field, wired through the same function
+       the render itself uses. */
+    if (delOpenHtml) {
+      var delBoxNow = document.getElementById("accDeleteBox");
+      if (delBoxNow) {
+        delBoxNow.innerHTML = delOpenHtml;
+        var delPwNow = document.getElementById("accDeletePw");
+        if (delPwNow && delPwWas != null) delPwNow.value = delPwWas;
+        wireDeleteConfirm(user, window.MP_AUTH.reauthKind(user));
+      }
+    }
   }
 
   /* ---------------- the name (Law F, sequenced by the v4 tour) ----
@@ -586,8 +616,20 @@
       "<button class='pillBtn' id='accDeleteCancel'>" + t("delete.keepAccount") + "</button></div>" +
       "<p class='hint' id='accDeleteMsg'></p></div>";
     box.innerHTML = html;
-    document.getElementById("accDeleteCancel").addEventListener("click", function () { box.innerHTML = ""; });
-    document.getElementById("accDeleteGo").addEventListener("click", function () { runDeletion(user, kind).catch(function () {}); });
+    wireDeleteConfirm(user, kind);
+  }
+  /* The delete box's own wiring, standing apart from the render
+     (app v54, Cure 6 — QA's night verdict on build 16, Finding
+     N3, and the night bisect's F3 scenario): a card rebuild
+     (renderSignedIn) replaces the box's elements wholesale, so a
+     box restored by renderSignedIn below is re-wired through this
+     same function and lands live, never as dead markup. */
+  function wireDeleteConfirm(user, kind) {
+    var box = document.getElementById("accDeleteBox");
+    var cancel = document.getElementById("accDeleteCancel");
+    if (cancel) cancel.addEventListener("click", function () { if (box) box.innerHTML = ""; });
+    var go = document.getElementById("accDeleteGo");
+    if (go) go.addEventListener("click", function () { runDeletion(user, kind).catch(function () {}); });
   }
   function runDeletion(user, kind) {
     var msg = document.getElementById("accDeleteMsg");
@@ -808,9 +850,11 @@
      sampling window, not after any retry delay), create nothing,
      adopt nothing, and retry the WHOLE resolution pull on a
      bounded interval until an adjudicated LOADED answer lands.
-     The pend and reject classes keep their v49/v50 fallbacks
-     exactly as they stand; this stands beside them for the class
-     they cannot see, the answer that lies. */
+     The pend and reject classes kept their v49/v50 fallbacks
+     when this was written; app v54 (Cure 4) retired the bare
+     fallback whole — every non-loaded landing of a resolution
+     chain now takes this treatment, whatever class carried it
+     there (see the catch at resolveAdopted's tail). */
   var NOT_LOADED_CODE = "mp/not-loaded";
   function notLoadedError() { var e = new Error(NOT_LOADED_CODE); e.code = NOT_LOADED_CODE; return e; }
   function isNotLoaded(e) { return !!e && e.code === NOT_LOADED_CODE; }
@@ -835,15 +879,89 @@
     if (e.code === "unavailable") return true;
     return typeof e.message === "string" && e.message.indexOf("client is offline") !== -1;
   }
+  /* A working copy's collection census, keyed by the engine's own
+     collection kinds (accounts.js COLLECTIONS) — the one ruler
+     the v54 cures read: the adjudication's proof carries it for
+     the cached copy (Cure 1), and the adopted road's convergence
+     compares it between the pulled state and the live copy
+     (Cure 2). Counts only; the states themselves never travel
+     through the proof. */
+  function stateCounts(st) {
+    var counts = {};
+    A.COLLECTIONS.forEach(function (kind) { counts[kind] = 0; });
+    if (!st || typeof st !== "object") return counts;
+    counts.familyMembers = Array.isArray(st.family) ? st.family.length : 0;
+    counts.pantryItems = Array.isArray(st.pantry) ? st.pantry.length : 0;
+    counts.planDays = (st.plan && typeof st.plan === "object" && !Array.isArray(st.plan)) ? Object.keys(st.plan).length : 0;
+    counts.customRecipes = Array.isArray(st.customRecipes) ? st.customRecipes.length : 0;
+    counts.shoppingExtras = Array.isArray(st.extras) ? st.extras.length : 0;
+    var items = 0;
+    if (st.doneItems && typeof st.doneItems === "object") items += Object.keys(st.doneItems).length;
+    if (st.hiddenItems && typeof st.hiddenItems === "object") items += Object.keys(st.hiddenItems).length;
+    counts.shoppingItemState = items;
+    counts.importedEvents = Array.isArray(st.events) ? st.events.length : 0;
+    counts.imports = Array.isArray(st.imports) ? st.imports.length : 0;
+    return counts;
+  }
+  /* The item identity the reconciliations union by: an item's own
+     id where it carries one, else its import key, else its whole
+     shape (events ride positionally in the docs, so shape is
+     their honest identity on the state side). */
+  function itemKey(it) {
+    if (!it || typeof it !== "object") return "j:" + JSON.stringify(it);
+    if (it.id != null) return "i:" + String(it.id);
+    if (it.key != null) return "k:" + String(it.key);
+    return "j:" + JSON.stringify(it);
+  }
+  /* RECONCILED ADOPTION (app v54, Cure 1's second half — the belt
+     to the adjudication's braces, under the data never deleted
+     law): a loaded pull adopted into the live key carries, per
+     collection, any items this device's cached copy of the same
+     account holds that the pull lacks (union by item identity;
+     the pulled item wins on a shared identity). The session
+     snapshot stays the PULLED documents, so a carried item
+     re-lands as a write on the next push, never as a delete:
+     the resolution layer never deletes. A stale cache may
+     resurrect an item deleted on another device, which the
+     never-delete law prefers to a silent loss. */
+  function reconcileWithCache(uid, pulledState) {
+    var cached = null;
+    try { var rawC = storage.get(A.cacheKeyFor(uid)); cached = rawC ? JSON.parse(rawC) : null; } catch (e) { cached = null; }
+    if (!cached || typeof cached !== "object" || Array.isArray(cached)) return pulledState;
+    var merged = JSON.parse(JSON.stringify(pulledState));
+    ["family", "pantry", "customRecipes", "extras", "events", "imports"].forEach(function (field) {
+      if (!Array.isArray(merged[field])) merged[field] = [];
+      var have = {};
+      merged[field].forEach(function (it) { have[itemKey(it)] = true; });
+      (Array.isArray(cached[field]) ? cached[field] : []).forEach(function (it) {
+        var k = itemKey(it);
+        if (!have[k]) { merged[field].push(JSON.parse(JSON.stringify(it))); have[k] = true; }
+      });
+    });
+    if (cached.plan && typeof cached.plan === "object") {
+      if (!merged.plan || typeof merged.plan !== "object") merged.plan = {};
+      Object.keys(cached.plan).forEach(function (day) { if (!(day in merged.plan)) merged.plan[day] = JSON.parse(JSON.stringify(cached.plan[day])); });
+    }
+    ["doneItems", "hiddenItems"].forEach(function (field) {
+      if (cached[field] && typeof cached[field] === "object") {
+        if (!merged[field] || typeof merged[field] !== "object") merged[field] = {};
+        Object.keys(cached[field]).forEach(function (k) { if (!(k in merged[field])) merged[field][k] = cached[field][k]; });
+      }
+    });
+    return merged;
+  }
   /* The adjudication's proof, from this device and this session:
      the account's Auth creation stamp (never a client written
-     field) and whether this device already holds a per account
-     cache copy for the uid. */
+     field), whether this device already holds a per account
+     cache copy for the uid, and (app v54) that copy's collection
+     census for the suspect-partial arm (Cure 1) plus the Auth
+     record's last sign in stamp for the provably new judgement's
+     second witness (Cure 3). */
   function pullProof(user) {
     var raw = storage.get(A.cacheKeyFor(user.uid));
-    var hasCache = false;
-    if (raw) { try { var c = JSON.parse(raw); hasCache = !!c && typeof c === "object" && !Array.isArray(c); } catch (e) {} }
-    return { authCreatedAtMs: A.accountAnchorMs(user), hasDeviceCache: hasCache, nowMs: Date.now() };
+    var hasCache = false, cacheCounts = null;
+    if (raw) { try { var c = JSON.parse(raw); hasCache = !!c && typeof c === "object" && !Array.isArray(c); if (hasCache) cacheCounts = stateCounts(c); } catch (e) {} }
+    return { authCreatedAtMs: A.accountAnchorMs(user), authLastSignInAtMs: A.accountLastSignInMs(user), hasDeviceCache: hasCache, cacheCounts: cacheCounts, nowMs: Date.now() };
   }
   /* The retry: one timer at most, for one uid, re-running the
      whole resolution (the same server source pull and the chain
@@ -915,9 +1033,11 @@
        the F2 bisect's named mechanism — and a rejected refresh
        used to die in the silent swallow below, its session
        keeping an unlanded truth with no word spoken and nothing
-       re-asked; the rejection arm now gives that one class the
-       not loaded treatment, and every other refusal keeps the
-       swallow it has always had.) */
+       re-asked; the v52 rejection arm gave that one class the
+       not loaded treatment. App v54 (Cure 4) widens the arm to
+       every refusal: the night bisect's S2 stops showed the
+       retry chain dying at landings in classes nobody had named,
+       so the swallow is retired whole.) */
     WAIT.bound(storePromise.then(function (store) { return A.pullAccount(store, uid, { source: "server" }); }), 30000).then(function (docs) {
       if (A.adjudicatePull(docs, pullProof(currentUser)) === "notLoaded") return;
       if (JSON.stringify(docs) !== JSON.stringify(snapshot)) {
@@ -928,7 +1048,13 @@
         location.reload();
       }
     }, function (e) {
-      if (isUnavailable(e) && currentUser && !currentUser.isAnonymous) { slowLoadLine(); scheduleResolutionRetry(currentUser); }
+      /* Every refusal of the refresh pull takes the treatment
+         now (app v54, Cure 4): the honest line and the retry,
+         while the session stands. The v52 arm named this for
+         the unavailable class alone; the night bisect's S2-5
+         showed the chain the arm fed dying at the retry's own
+         landing classes, so no class keeps the old swallow. */
+      if (currentUser && !currentUser.isAnonymous) { slowLoadLine(); scheduleResolutionRetry(currentUser); }
     });
   });
 
@@ -942,8 +1068,14 @@
     }
     var raw = storage.get(A.LIVE_KEY);
     if (raw && !device.guestPotConsumed) storage.set(A.guestCacheKey(), raw);
-    setLive(pulled.state);
-    storage.set(A.cacheKeyFor(user.uid), JSON.stringify(pulled.state));
+    /* The adoption is reconciled (app v54, Cure 1 — see
+       reconcileWithCache): the live key and the cache take the
+       pulled state carrying anything the device's cached copy
+       holds that the pull lacks, while the snapshot above stays
+       the pulled documents alone. */
+    var landedState = reconcileWithCache(user.uid, pulled.state);
+    setLive(landedState);
+    storage.set(A.cacheKeyFor(user.uid), JSON.stringify(landedState));
     device.uid = user.uid; device.adoptedUid = user.uid; saveDevice();
     location.reload();
   }
@@ -967,6 +1099,57 @@
     }).then(function () {}, function () {});
   }
 
+  /* The create window's additions (app v54, Cure 5 — QA's night
+     verdict on build 16 and the night bisect verdict, S1-B1/B2):
+     what the working copy gained between a create's compose and
+     its landing, per collection, by item identity. Anything
+     already standing in the copy when the create began is NOT an
+     addition and is never swept in — the guest pot at the import
+     gate's offer and every other road keep exactly their own
+     handling of what was already there. */
+  function windowAdditions(entry, now) {
+    var delta = { family: [], pantry: [], customRecipes: [], extras: [], events: [], imports: [], plan: {}, doneItems: {}, hiddenItems: {} };
+    if (!now || typeof now !== "object") return delta;
+    ["family", "pantry", "customRecipes", "extras", "events", "imports"].forEach(function (field) {
+      var had = {};
+      (entry && Array.isArray(entry[field]) ? entry[field] : []).forEach(function (it) { had[itemKey(it)] = true; });
+      (Array.isArray(now[field]) ? now[field] : []).forEach(function (it) { if (!had[itemKey(it)]) delta[field].push(it); });
+    });
+    if (now.plan && typeof now.plan === "object") Object.keys(now.plan).forEach(function (day) { if (!entry || !entry.plan || !(day in entry.plan)) delta.plan[day] = now.plan[day]; });
+    ["doneItems", "hiddenItems"].forEach(function (field) {
+      if (now[field] && typeof now[field] === "object") Object.keys(now[field]).forEach(function (k) { if (!entry || !entry[field] || !(k in entry[field])) delta[field][k] = now[field][k]; });
+    });
+    return delta;
+  }
+  function windowDeltaEmpty(delta) {
+    return !delta.family.length && !delta.pantry.length && !delta.customRecipes.length && !delta.extras.length && !delta.events.length && !delta.imports.length &&
+      !Object.keys(delta.plan).length && !Object.keys(delta.doneItems).length && !Object.keys(delta.hiddenItems).length;
+  }
+  /* The plain road's landing merge: the start state carrying the
+     window's additions (live additions win in, union by item
+     identity) and a name answered inside the window over the
+     start state's — an answer or an edit made while the create
+     was in flight is the person's own save, and it lands. */
+  function mergeCreateWindow(entryLive, startState) {
+    var now = liveState();
+    var delta = windowAdditions(entryLive, now);
+    var merged = JSON.parse(JSON.stringify(startState));
+    ["family", "pantry", "customRecipes", "extras", "events", "imports"].forEach(function (field) {
+      if (!Array.isArray(merged[field])) merged[field] = [];
+      var have = {};
+      merged[field].forEach(function (it) { have[itemKey(it)] = true; });
+      delta[field].forEach(function (it) { var k = itemKey(it); if (!have[k]) { merged[field].push(JSON.parse(JSON.stringify(it))); have[k] = true; } });
+    });
+    Object.keys(delta.plan).forEach(function (day) { merged.plan[day] = JSON.parse(JSON.stringify(delta.plan[day])); });
+    ["doneItems", "hiddenItems"].forEach(function (field) {
+      if (!merged[field] || typeof merged[field] !== "object") merged[field] = {};
+      Object.keys(delta[field]).forEach(function (k) { merged[field][k] = delta[field][k]; });
+    });
+    var entryName = entryLive && typeof entryLive.accountName === "string" ? entryLive.accountName : "";
+    if (now && typeof now.accountName === "string" && now.accountName && now.accountName !== entryName) merged.accountName = now.accountName;
+    return merged;
+  }
+
   /* Create a brand new account's profile from the designed empty
      state, carrying the name known by any road at that moment
      (the name on the Google or Apple profile, or none at all:
@@ -977,8 +1160,18 @@
      and the pot waits in the guest cache, one tap from the
      Account card; otherwise the working copy starts as the
      designed empty state. Either way the device adopts the
-     account and reloads onto it. */
+     account and reloads onto it. (App v54, Cure 5: the create
+     push can take seconds, and what the person saves into the
+     working copy in that window used to die at the landing —
+     setLive(startState) wrote the composed blank over it after
+     its debounce had nowhere true to compose against (the night
+     bisect's S1-B1/B2: the anchor plants, account B's member).
+     Both landings below now re-read the working copy before
+     they set it.) */
   function createProfile(store, user, gate, acctName) {
+    /* The working copy as the create begins: the window's
+       additions are measured against this, and only those. */
+    var entryLive = liveState();
     if (gate === "offer") {
       adopting = true;
       var raw = storage.get(A.LIVE_KEY);
@@ -989,7 +1182,12 @@
       return reloadOnTimeout(A.pushAccount(store, user.uid, startBlank, null, nowIso()).then(function (created) {
         snapshot = created;
         /* The account starts empty on screen too: the pot waits
-           in the guest cache, one tap from the Account card. */
+           in the guest cache, one tap from the Account card. What
+           the window added belongs to that pot, not the account:
+           the stash is refreshed from the working copy, so the
+           window's saves ride the import like the rest of it. */
+        var nowOff = liveState();
+        if (!windowDeltaEmpty(windowAdditions(entryLive, nowOff))) storage.set(A.guestCacheKey(), JSON.stringify(nowOff));
         setLive(startBlank);
         storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startBlank));
         return dailyStamps(user, true);
@@ -999,17 +1197,33 @@
     startState.accountName = acctName;
     return reloadOnTimeout(A.pushAccount(store, user.uid, startState, null, nowIso()).then(function (created) {
       snapshot = created;
-      storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startState));
-      setLive(startState);
+      /* The window merge (Cure 5): re-read the working copy,
+         carry its additions into the start state, and land THAT
+         — then push the merged copy against the created
+         documents inside this same chain, so the additions stand
+         on the server under the new snapshot before the reload,
+         not on some later save's mercy. A quiet window merges
+         to the start state itself and pushes nothing more. */
+      var merged = mergeCreateWindow(entryLive, startState);
+      var mergedDocs = A.stateToDocs(merged);
+      var windowLanded = JSON.stringify(A.canonical(mergedDocs.collections)) !== JSON.stringify(A.canonical(created.collections)) ||
+        (merged.accountName || "") !== ((created.profile && created.profile.name) || "");
+      storage.set(A.cacheKeyFor(user.uid), JSON.stringify(merged));
+      setLive(merged);
       device.uid = user.uid; device.adoptedUid = user.uid; saveDevice();
-      return dailyStamps(user, true);
+      if (!windowLanded) return dailyStamps(user, true);
+      return A.pushAccount(store, user.uid, merged, created, nowIso()).then(function (next) {
+        snapshot = next;
+        return dailyStamps(user, true);
+      });
     }).then(function () { location.reload(); }));
   }
 
-  /* U5's honest line (app v49): when the resolution chain's
-     bound fires, the terminal catch renders its usual fallback
-     first, and this line lands on the Account card's own message
-     line, which that render has just built. */
+  /* U5's honest line (app v49): the line lands on the Account
+     card's own message line, which the landing's render has just
+     built. Since app v54 (Cure 4) every non-loaded landing
+     renders first and stands this line after (landNotLoaded),
+     so a rebuild can never erase it. */
   function slowLoadLine() {
     var m = document.getElementById("accMsg2");
     if (m) m.textContent = t("account.slowLoad");
@@ -1074,6 +1288,40 @@
     resolveFirst(user);
   }
 
+  /* SNAPSHOT/LIVE CONVERGENCE (app v54, Cure 2 — QA's night
+     verdict on build 16, Finding N1; the night bisect verdict,
+     S1 chain M4): the adopted road never wrote the live copy, so
+     after an adoption reload the snapshot could hold the full
+     truth while the live key stood poorer (an adoption formed
+     from a shape the gate could not see, a copy blanked by any
+     road), and the first push after that — a person's own save,
+     a sign out, the next visit's name re-ask bookkeeping —
+     deleted from the server whatever the live copy lacked.
+     Now: after an adjudicated LOADED pull on this road, when
+     the pulled state differs from the live copy in the loss
+     direction (any collection poorer in the live copy, or no
+     live copy at all), the pull LANDS in the working copy the
+     way the visibility refresh lands it — reconciled with the
+     device cache per Cure 1, cached at the account's cache key,
+     the snapshot staying the pulled documents — so snapshot and
+     live agree before any push can compose. A live copy at
+     least as rich as the pull in every collection is the
+     person's own newer truth and is left exactly as it stands.
+     No reload is added: the landing's own render and the open
+     view's re-render (rerenderOpenView, in the chain below)
+     show what landed. */
+  function convergeLive(user, docs) {
+    var pulledState = A.docsToState(docs).state;
+    var live = liveState();
+    var want = stateCounts(pulledState);
+    var have = stateCounts(live);
+    var poorer = !live || A.COLLECTIONS.some(function (kind) { return (have[kind] || 0) < (want[kind] || 0); });
+    if (!poorer) return;
+    var landedState = reconcileWithCache(user.uid, pulledState);
+    setLive(landedState);
+    try { storage.set(A.cacheKeyFor(user.uid), JSON.stringify(landedState)); } catch (e) {}
+  }
+
   function resolveAdopted(user) {
       /* Already adopted on this device: resolve the tier, refresh the
          card, and let the save hook carry changes from here. A
@@ -1082,10 +1330,24 @@
          visit, then never again). */
       /* U5 (app v49): the whole resolution chain (the pull, the
          tier, the record read) races a 30 second bound through
-         the shared helper. Its catches below fire on rejection
-         only, never on duration; on a timeout the terminal catch
-         takes exactly its usual fallback and adds the honest
-         slow line. */
+         the shared helper. (App v54, Cure 4 — QA's night verdict
+         on build 16, Finding N2, and the night bisect verdict's
+         S2 stops A and B: the retry used to arm only from the
+         NOT LOADED landing, so a retried pull that pended into
+         this bound, or refused in any class without a name,
+         landed in the terminal catch's bare fallback — the card
+         rendered, nothing re-armed, and the render itself wiped
+         the standing honest line; the chain died at pull 2 while
+         the identical bytes healed on another run. The terminal
+         catch below now takes the NOT LOADED treatment for EVERY
+         non-loaded landing, whatever class carried it there —
+         the adjudicated not loaded, the unavailable refusal, the
+         bound's own timeout, any other refusal: render the
+         session, stand the line AFTER the render so no rebuild
+         can erase it, arm the retry — until an adjudicated LOADED
+         answer lands or the session signs out. The classes keep
+         their names in the classifiers above; none of them is a
+         dead end any more.) */
       WAIT.bound(storePromise.then(function (store) {
         var pulledDocs = null;
         /* The resolution pull reads from the SERVER (app v50,
@@ -1107,10 +1369,10 @@
              judged HERE, on the success path, before the heal,
              the tier or the record read may touch it. An empty
              answer for an account that is not provably new is
-             no answer: it is thrown to the terminal catch's NOT
-             LOADED branch, which stands the line on the first
-             pull and arms the retry — no catch wired only to a
-             timeout can ever see this class. */
+             no answer: it is thrown to the terminal catch, whose
+             NOT LOADED treatment (app v54, Cure 4) stands the
+             line on the first pull and arms the retry — no catch
+             wired only to a timeout can ever see this class. */
           if (A.adjudicatePull(docs, pullProof(user)) === "notLoaded") throw notLoadedError();
           if (docs.profile) return docs;
           /* No profile on the server for an adopted account (app
@@ -1130,6 +1392,11 @@
         }).then(function (docs) {
           snapshot = docs;
           pulledDocs = docs;
+          /* The convergence (app v54, Cure 2, convergeLive
+             above): the loaded pull lands in the working copy
+             wherever the copy stands poorer, before the tier,
+             the record or any later push can read the split. */
+          convergeLive(user, docs);
           return A.syncTier(store, user.uid, { demo: false, source: "server" });
         }).then(function (t) {
           if (t) {
@@ -1164,16 +1431,15 @@
             });
           }
         });
-      }), 30000).catch(function (e) {
-        if (isNotLoaded(e) || isUnavailable(e)) { landNotLoaded(user); return; }
-        renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine();
-      });
+      }), 30000).catch(function (e) { landNotLoaded(user); });
   }
 
   function resolveFirst(user) {
     /* First sign in of this account on this device. The chain
        races the same 30 second bound as the adopted road above
-       (app v49, U5), with the same fallback and the same line. */
+       (app v49, U5), and its terminal catch takes the same NOT
+       LOADED treatment as every non-loaded landing (app v54,
+       Cure 4 — see the catch at resolveAdopted's tail). */
     WAIT.bound(storePromise.then(function (store) {
       /* The server source again (app v50, Finding 2): a signup
          decision made on an offline empty answer would create a
@@ -1234,10 +1500,7 @@
         adopt(user, docs);
         return dailyStamps(user, false);
       });
-    }), 30000).catch(function (e) {
-      if (isNotLoaded(e) || isUnavailable(e)) { landNotLoaded(user); return; }
-      renderSignedIn(user, {}); if (WAIT.isTimeout(e)) slowLoadLine();
-    });
+    }), 30000).catch(function (e) { landNotLoaded(user); });
   }
 
   /* After an adoption reload with an import waiting, re-offer it. */

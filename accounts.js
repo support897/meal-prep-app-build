@@ -438,24 +438,62 @@
   /* Provably new: the account's Auth record was created within a
      tight window of this session (ten minutes, with a minute of
      clock skew forgiven) AND this device holds no per account
-     cache for the uid. Either arm failing defeats the proof: a
-     returning account's creation stamp is old by definition, and
-     a device that has cached this account's copy before has seen
-     an account with a past, however fresh the stamp looks. The
-     creation stamp itself is the Auth record's own metadata (see
-     accountAnchorMs below), never a client written field. */
+     cache for the uid AND the Auth record carries no earlier sign
+     in than the creation itself (app v54, Cure 3 — the second
+     witness, from the night bisect, ~/smoke/night-bisect-verdict.md,
+     S1-gamma: a minutes-old RETURNING account whose cache was gone
+     passed on the age arm alone and was created over; a sign in
+     stamp later than the creation, past the standing skew, is a
+     return's fingerprint, and no genuine first sign in carries
+     one). Any arm failing defeats the proof: a returning account's
+     creation stamp is old by definition, and a device that has
+     cached this account's copy before has seen an account with a
+     past, however fresh the stamp looks. The creation stamp itself
+     is the Auth record's own metadata (see accountAnchorMs below),
+     never a client written field. */
   var NEW_ACCOUNT_WINDOW_MS = 10 * 60 * 1000;
   function provablyNewAccount(proof) {
     proof = isPlainObj(proof) ? proof : {};
     if (proof.hasDeviceCache) return false;
     var created = proof.authCreatedAtMs;
     if (typeof created !== "number" || !isFinite(created)) return false;
+    var lastIn = proof.authLastSignInAtMs;
+    if (typeof lastIn === "number" && isFinite(lastIn) && lastIn - created > 60000) return false;
     var now = (typeof proof.nowMs === "number" && isFinite(proof.nowMs)) ? proof.nowMs : Date.now();
     var age = now - created;
     return age >= -60000 && age <= NEW_ACCOUNT_WINDOW_MS;
   }
+  /* The one adjudicator: a resolved pull is judged on the success
+     path (app v51, Cure 1 of that round). An answer carrying any
+     real content is loaded; an answer carrying nothing at all is
+     loaded only when the account is provably new, else NOT LOADED.
+     App v54 (Cure 1 — QA's night verdict on build 16,
+     verdict-night-mealprep-b16.md, Finding N1, and the night
+     bisect verdict, S1 chain M1/M2) adds the suspect-partial arm:
+     a NON-empty answer that is POORER than this device's cached
+     copy of the same account in any collection is judged NOT
+     LOADED too. The old gate read only the fully-empty shape, so
+     a partial answer (the profile real, a collection answered
+     empty out of the wedged channel) was adopted whole and became
+     the wipe's first half. The channel's partial answer is no
+     answer. The arm keys off the proof's collection census
+     (cacheCounts) alone: with no cache, or a pull at least as rich
+     as the cache in every collection, every standing verdict is
+     exactly as it was. */
   function adjudicatePull(docs, proof) {
-    if (!docsAreEmpty(docs)) return "loaded";
+    if (!docsAreEmpty(docs)) {
+      if (isPlainObj(proof) && isPlainObj(proof.cacheCounts) && isPlainObj(docs) && isPlainObj(docs.collections)) {
+        var poorer = COLLECTIONS.some(function (kind) {
+          var want = proof.cacheCounts[kind];
+          if (typeof want !== "number" || !isFinite(want)) return false;
+          var bag = docs.collections[kind];
+          var got = isPlainObj(bag) ? Object.keys(bag).length : 0;
+          return got < want;
+        });
+        if (poorer) return "notLoaded";
+      }
+      return "loaded";
+    }
     return provablyNewAccount(proof) ? "loaded" : "notLoaded";
   }
 
@@ -482,6 +520,16 @@
      month, never toward a restarted one. */
   function accountAnchorMs(authUser) {
     var v = isPlainObj(authUser) ? authUser.createdAtMs : null;
+    return (typeof v === "number" && isFinite(v) && v > 0) ? v : null;
+  }
+  /* The second witness's reader (app v54, Cure 3): the Auth
+     record's own last sign in stamp, carried on the normalised
+     user by auth.js beside the creation stamp. Server stamped,
+     no client write path, exactly like the anchor. A missing or
+     unreadable stamp reads null, and provablyNewAccount treats an
+     absent stamp as no evidence either way. */
+  function accountLastSignInMs(authUser) {
+    var v = isPlainObj(authUser) ? authUser.lastSignInAtMs : null;
     return (typeof v === "number" && isFinite(v) && v > 0) ? v : null;
   }
   function freeMonthEndsMs(anchorMs) {
@@ -973,7 +1021,7 @@
     tierPath: tierPath, planLineFor: planLineFor, syncTier: syncTier,
     subscriptionPath: subscriptionPath, entitlementFromRecord: entitlementFromRecord, readEntitlementRecord: readEntitlementRecord,
     docsAreEmpty: docsAreEmpty, provablyNewAccount: provablyNewAccount, adjudicatePull: adjudicatePull, NEW_ACCOUNT_WINDOW_MS: NEW_ACCOUNT_WINDOW_MS,
-    accountAnchorMs: accountAnchorMs, freeMonthEndsMs: freeMonthEndsMs, withinFreeMonth: withinFreeMonth,
+    accountAnchorMs: accountAnchorMs, accountLastSignInMs: accountLastSignInMs, freeMonthEndsMs: freeMonthEndsMs, withinFreeMonth: withinFreeMonth,
     ACTIVATION_SOURCES: ACTIVATION_SOURCES, noteActivation: noteActivation,
     contribPath: contribPath, buildContrib: buildContrib, cleanStamps: cleanStamps, mergeStamps: mergeStamps, stampStep: stampStep, stampChain: stampChain, computeAggregates: computeAggregates, weekKey: weekKey,
     subscriptionRecord: subscriptionRecord, reviewRecord: reviewRecord,
