@@ -643,15 +643,61 @@
     /* While the sweep runs, no push or pull may recreate or readopt
        the data being deleted. */
     deleting = true; adopting = true;
+    /* The delete chain takes the house bound on its reauth
+       leg (app v58, Clause C — the F-B20-1 bisect verdict,
+       Part 5, defect D2): every neighbouring chain in this
+       file is bounded (the resolutions' U5, the sign-out's
+       U6), and this chain's reauth was the one unbounded
+       await left in the file. On a channel that pends —
+       a reauth that never answers — the tap hung at the
+       checking line forever, no line, no retry, and the
+       flags above stayed held, silently freezing the
+       session's own saves behind it for the rest of the
+       session. The bound rides the reauth dependency
+       itself, in the U6 shape (WAIT.bound, 30 s from the
+       tap): a pended reauth settles the flow at the bound
+       as that stage's timeout, read at the seam below,
+       where the flags stand down and the existing
+       not-finished line stands — a told, retryable
+       failure. The bound is NOT wrapped around the whole
+       chain, on staged evidence: a delete that is
+       ANSWERING, doc by doc on a slow channel, is
+       progressing, and a whole-chain timer staged against
+       the standing C6-B drive fired mid-sweep and reported
+       not-finished over a deletion that then completed
+       behind the message (the account gone, no reset
+       fired) — this clause's own words in the verdict are
+       "no behaviour change when the channel answers". The
+       sweep's stages settle by refusal on a wedged
+       channel, as every wedge staging on record shows;
+       the pend this clause answers is the reauth's. */
+    var reauthTimedOut = false;
+    var reauthBounded = WAIT.bound(window.MP_AUTH.reauthFor(user, pw), 30000);
+    /* The rider marks the bound's own timeout (read with
+       the wait helper's own isTimeout) for the seam below,
+       and keeps a flow that never starts (a store that
+       never readies) from surfacing the rejection
+       unhandled. */
+    reauthBounded.catch(function (err) { if (WAIT.isTimeout(err)) reauthTimedOut = true; });
     return storePromise.then(function (store) {
       return A.deleteAccountFlow(store, user.uid, {
-        reauth: function () { return window.MP_AUTH.reauthFor(user, pw); },
+        reauth: function () { return reauthBounded; },
         deleteAuthUser: function () { return window.MP_AUTH.deleteCurrentUser(); }
       });
     }).then(function (res) {
       if (!res.ok) {
         deleting = false; adopting = false;
-        if (msg) {
+        if (res.stage === "reauth" && reauthTimedOut) {
+          /* Clause C's settle: the pend became the bound's
+             own timeout. The honest line is the
+             not-finished one, not the wrong-password one,
+             and the element is re-read at settle time —
+             a rebuild during the wait may have replaced
+             the one captured at the start. */
+          var msgNow = document.getElementById("accDeleteMsg");
+          if (msgNow) msgNow.textContent = t("delete.notFinished");
+        }
+        else if (msg) {
           if (res.stage === "reauth") msg.textContent = t("delete.reauthFail");
           else if (res.stage === "authUser") msg.textContent = t("delete.authUserFail");
           else msg.textContent = t("delete.stoppedAt", { step: stepWord(res.stage) });
@@ -673,7 +719,13 @@
       return window.MP_AUTH.signOut().then(function () { location.reload(); }, function () { location.reload(); });
     }, function () {
       deleting = false; adopting = false;
-      if (msg) msg.textContent = t("delete.notFinished");
+      /* The message element is re-read at settle time (app
+         v58, Clause C): a card rebuild during the wait may
+         have replaced the element this flow captured at its
+         start, and the line must stand on the element that
+         stands. */
+      var msgNow = document.getElementById("accDeleteMsg");
+      if (msgNow) msgNow.textContent = t("delete.notFinished");
     });
   }
 
@@ -993,6 +1045,31 @@
      write stands as it always has. */
   function ownerAdopt(st) {
     if (window.MP_TOUR && window.MP_TOUR.adoptLandedState) window.MP_TOUR.adoptLandedState(st);
+  }
+  /* No baseline without its state (app v58, the F-B20-1
+     cure, Clause A — QA's build 20 retest verdict,
+     verdict-mealprep-b20-retest.md, blob ce43e1ed, finding
+     F-B20-1; the F-B20-1 bisect verdict, Part 6): the
+     invariant the session already lives by after every
+     save is that the baseline is the documents of the
+     state the session would compose. Two refreshes broke
+     it, taking the PULLED documents as the baseline while
+     the state stood older — the adopted road's resolution
+     (B1 in the bisect census) and the convergence
+     re-check (B2) — and the first writer after either,
+     the sign-out in QA's staging, composed the stale
+     state against the fresh baseline and wrote another
+     device's deletion back at the server. This helper is
+     the discipline, at the glue seam beside ownerAdopt:
+     given the state a landing leaves standing, the
+     baseline that belongs to it. A landing that leaves
+     no readable state leaves the baseline exactly as it
+     stands. pushAccount and the adjudication are NOT
+     touched — the engine is faithful and the judge
+     unchanged; the cure lives where the refresh happens. */
+  function baselineFrom(state) {
+    if (!state || typeof state !== "object") return snapshot;
+    return A.stateToDocs(state);
   }
   /* Tombstones (app v57, the F-B19-1 cure, clause 2 — the
      bisect verdict's Face 1, Road B): a day this device holds
@@ -1563,7 +1640,13 @@
      person's own newer truth and is left exactly as it stands.
      No reload is added: the landing's own render and the open
      view's re-render (rerenderOpenView, in the chain below)
-     show what landed. */
+     show what landed. (App v58, the F-B20-1 cure, Clause A:
+     the function RETURNS the state it leaves standing — the
+     landed state where it lands, the standing live copy
+     where it refuses — so its two callers can take their
+     baseline from that state through baselineFrom, never
+     from the pulled documents; see the helper and the two
+     call sites.) */
   function convergeLive(user, docs, opts) {
     var pulledState = A.docsToState(docs).state;
     /* A census stand trip (app v55, Cure F1) lands the pulled
@@ -1589,13 +1672,13 @@
       setLive(pulledState);
       try { storage.set(A.cacheKeyFor(user.uid), JSON.stringify(pulledState)); } catch (e) {}
       ownerAdopt(pulledState);
-      return;
+      return pulledState;
     }
     var live = liveState();
     var want = stateCounts(pulledState);
     var have = stateCounts(live);
     var poorer = !live || A.COLLECTIONS.some(function (kind) { return (have[kind] || 0) < (want[kind] || 0); });
-    if (!poorer) return;
+    if (!poorer) return live;
     var landedState = reconcileWithCache(user.uid, pulledState);
     /* App v57: tombstones ride the reconciled landing too,
        and the owner adopts what landed (clause 1) — this
@@ -1607,6 +1690,7 @@
     setLive(landedState);
     try { storage.set(A.cacheKeyFor(user.uid), JSON.stringify(landedState)); } catch (e) {}
     ownerAdopt(landedState);
+    return landedState;
   }
 
   /* THE RELOAD DEFERRAL (app v57, the cure for Cure 6's open
@@ -1701,8 +1785,22 @@
         var before = docsCounts(snapshot), after = docsCounts(docs2);
         var richer = A.COLLECTIONS.some(function (kind) { return (after[kind] || 0) > (before[kind] || 0); });
         if (!richer) return;
-        snapshot = docs2;
-        convergeLive(currentUser, docs2);
+        /* App v58 (the F-B20-1 cure, Clause A — the bisect
+           census's B2): this assignment used to take the
+           re-check's pulled documents as the baseline
+           outright, on a richer-in-any-kind answer that
+           could be poorer in another kind — a plan day
+           another device deleted inside the window — while
+           the convergence's landing went through the cache
+           union and carried that day back into the state.
+           Baseline fresh, state stale: the pair the
+           sign-out later composed. The baseline is now
+           taken from the state the convergence leaves
+           standing, through baselineFrom, so state and
+           baseline describe the same copy after the
+           refresh and no later writer can compose the
+           deletion back. */
+        snapshot = baselineFrom(convergeLive(currentUser, docs2));
       }, function () {});
     }, CONVERGENCE_RECHECK_MS);
   }
@@ -1796,15 +1894,25 @@
             return created;
           });
         }).then(function (docs) {
-          snapshot = docs;
           pulledDocs = docs;
           /* The convergence (app v54, Cure 2, convergeLive
              above): the loaded pull lands in the working copy
              wherever the copy stands poorer, before the tier,
              the record or any later push can read the split. A
              census stand trip (app v55, Cure F1) converges
-             unconditionally and unreconciled instead. */
-          convergeLive(user, docs, censusTripped ? { suppressReconcile: true } : undefined);
+             unconditionally and unreconciled instead.
+             (App v58, the F-B20-1 cure, Clause A — the bisect
+             census's B1: this resolution used to assign the
+             pulled documents to the baseline BEFORE the
+             convergence judged the landing, so a pull poorer
+             in a deleted collection — refused by the
+             convergence's loss-direction guard, rightly —
+             still refreshed the baseline past the standing
+             state, and the first later writer composed the
+             pair and undid the deletion. The baseline is now
+             taken from the state the convergence leaves
+             standing, through baselineFrom.) */
+          snapshot = baselineFrom(convergeLive(user, docs, censusTripped ? { suppressReconcile: true } : undefined));
           return A.syncTier(store, user.uid, { demo: false, source: "server" });
         }).then(function (t) {
           if (t) {
