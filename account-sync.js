@@ -833,6 +833,19 @@
   }
 
   /* ---------------- sync ---------------- */
+  /* The one push body (app v61, F-B23-2): the debounce timer and
+     the flush below run exactly this, so a push composes, writes
+     and advances the snapshot identically by either road. It
+     resolves in every arm, so a caller waiting on it is never
+     trapped by an empty state or a lost user. */
+  function runPush() {
+    var st = liveState();
+    if (!st || !currentUser) { pushPending = false; return Promise.resolve(); }
+    var uid = currentUser.uid;
+    return storePromise.then(function (store) {
+      return A.pushAccount(store, uid, st, snapshot, nowIso());
+    }).then(function (next) { snapshot = next; pushPending = false; }, function () { pushPending = false; });
+  }
   function schedulePush() {
     if (!currentUser || adopting || deleting) return;
     /* Pushes are never held for a name (app v50, QA build 12
@@ -843,17 +856,32 @@
        account of every save it ever made. */
     pushPending = true;
     if (pushTimer) clearTimeout(pushTimer);
-    pushTimer = setTimeout(function () {
-      var st = liveState();
-      if (!st || !currentUser) { pushPending = false; return; }
-      var uid = currentUser.uid;
-      storePromise.then(function (store) {
-        return A.pushAccount(store, uid, st, snapshot, nowIso());
-      }).then(function (next) { snapshot = next; pushPending = false; }, function () { pushPending = false; });
-    }, 2000);
+    pushTimer = setTimeout(function () { runPush(); }, 2000);
+  }
+  /* The flush (app v61, F-B23-2): a save whose next act destroys
+     the page cannot ride the 2 s debounce. The language pick's
+     handler saved, mirrored, and reloaded in the one tick; the
+     teardown killed the debounce timer before it could fire,
+     the push never ran, and the server doc kept language
+     "auto" — which the next landing then adopted back over the
+     pick, so the choice evaporated (QA build 23, REST-proven
+     twice, two sessions). flushPush clears the pending timer
+     and runs the same push now, returning its promise. It
+     resolves at once when there is no signed-in user or
+     nothing pending (a guest's pick is local-only and must
+     not hang), and the wait rides the house bound (WAIT, the
+     one bounding helper): a wedged store fails the wait at
+     4 s rather than trapping the caller on the page — the
+     handler settles on either arm — while the push itself
+     still settles behind the bound. */
+  function flushPush() {
+    if (!currentUser || adopting || deleting || !pushPending) return Promise.resolve();
+    if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+    return WAIT.bound(runPush(), 4000);
   }
   window.MP_ACCOUNT_HOOK = {
     onSave: function () { schedulePush(); },
+    flushPush: function () { return flushPush(); },
     onPlanned: function (source) {
       var r = A.noteActivation({ activatedAt: device.activatedAt }, source, nowIso());
       if (!r.stamped) return;

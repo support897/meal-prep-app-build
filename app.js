@@ -1292,7 +1292,18 @@
       s.language = pick;
       save();
       LANG.setChoice(pick);
-      location.reload();
+      /* The reload waits for the save's push (app v61,
+         F-B23-2): the push rides a 2 s debounce and the old
+         same-tick reload tore the page down before the timer
+         fired, so the pick never reached the server and the
+         next landing adopted "auto" back over it. The hook's
+         flush runs that push now and the reload follows its
+         settle (the flush is bounded, so a wedged store
+         cannot hold the page); with no hook installed the
+         reload fires at once, exactly as before. */
+      var hook = window.MP_ACCOUNT_HOOK;
+      if (hook && hook.flushPush) hook.flushPush().then(function () { location.reload(); }, function () { location.reload(); });
+      else location.reload();
     });
   });
 
