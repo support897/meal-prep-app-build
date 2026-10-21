@@ -2,7 +2,7 @@
 #
 # Target location in repo: .github/workflows/ios-ipa.yml
 # Repo: support897/meal-prep-app · App tree: store-build/ (certified v34,
-# service worker "mealprep-v58", bundle com.ilseplacencia.mealprep)
+# service worker "mealprep-v59", bundle com.ilseplacencia.mealprep)
 #
 # Signing material comes from repo secrets ONLY:
 #   DIST_CERT_P12_B64        base64 of the Apple Distribution .p12
@@ -49,7 +49,7 @@ jobs:
             mkdir -p "store-build/www/$(dirname "$f")"
             cp "$f" "store-build/www/$f"
           done
-          grep -q 'mealprep-v58' store-build/www/service-worker.js
+          grep -q 'mealprep-v59' store-build/www/service-worker.js
           echo "www tree assembled: $(find store-build/www -type f | wc -l) files"
 
       - name: Install dependencies
