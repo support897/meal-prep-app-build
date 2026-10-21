@@ -1066,10 +1066,55 @@
      no readable state leaves the baseline exactly as it
      stands. pushAccount and the adjudication are NOT
      touched — the engine is faithful and the judge
-     unchanged; the cure lives where the refresh happens. */
-  function baselineFrom(state) {
+     unchanged; the cure lives where the refresh happens.
+     (App v59, the F-B21-1 cure — QA's build 21 retest
+     verdict, verdict-mealprep-b21-retest.md, finding
+     F-B21-1, and the F-B21 bisect verdict,
+     ~/smoke/f-b21-bisect-verdict.md: the state-only
+     baseline this helper returned starved the profile
+     write on the SECOND fidelity axis. stateToDocs'
+     profile speaks 14 fields and none of the seven
+     server-managed ones (createdAt · activatedAt ·
+     sessions · lastActiveAt · plan · deletedByUser ·
+     dataImportedAt); pushAccount's only source for
+     those seven is its carry-forward from the baseline
+     it is handed, so after either Clause A landing the
+     next profile write omitted them all — refused WHOLE
+     by the rules' write-once activatedAt clause on an
+     activated account (every profile edit in the
+     session silently lost, self-perpetuating), and
+     landed-and-deleting on an account without
+     activatedAt (createdAt, the free-month anchor,
+     destroyed). The helper now takes the landing's own
+     pulled documents as its second argument — the
+     resolution's pull at the adopted road (on the heal
+     continuation, the created documents the heal push
+     returned, so the heal's stamps enter by the same
+     line), the re-check's pull at the re-check — and
+     carries the seven forward INTO the baseline's
+     profile from that source, or from the baseline the
+     landing replaces when the pull is not the source.
+     The carried values are the SERVER's, never composed
+     from state (the state has no fields for them at
+     all); the carry touches the profile's seven keys
+     only, so the collections still come from the
+     standing state alone and no deletion can resurrect
+     through it — Clause A's invariant stands exactly
+     where it was convicted. Security's S9 extension is
+     satisfied in form: every baseline a landing leaves
+     is now FIELD-COMPLETE at the profile, at every
+     refresh, not only census-equal ones — the census's
+     other sites were already server-sourced and
+     complete (the bisect verdict's census table), and
+     do not move.) */
+  var SERVER_MANAGED_PROFILE_FIELDS = ["createdAt", "activatedAt", "sessions", "lastActiveAt", "plan", "deletedByUser", "dataImportedAt"];
+  function baselineFrom(state, sourceDocs) {
     if (!state || typeof state !== "object") return snapshot;
-    return A.stateToDocs(state);
+    var docs = A.stateToDocs(state);
+    if (!docs || !docs.profile) return docs;
+    var src = (sourceDocs && sourceDocs.profile) || (snapshot && snapshot.profile) || null;
+    if (src) SERVER_MANAGED_PROFILE_FIELDS.forEach(function (k) { if (src[k] !== undefined) docs.profile[k] = src[k]; });
+    return docs;
   }
   /* Tombstones (app v57, the F-B19-1 cure, clause 2 — the
      bisect verdict's Face 1, Road B): a day this device holds
@@ -1432,6 +1477,35 @@
     return merged;
   }
 
+  /* The OFFER road's closing state (app v59, the F-B21-2
+     cure — the F-B21 bisect verdict): the blank start PLUS
+     the birth window's delta, the additions measured from
+     the door-time copy to the working copy as the create
+     lands (windowAdditions' own shape: the array fields by
+     item identity, the plan days and the item state maps
+     by key), with the window copy's non-empty name winning
+     the way the plain road's merge lets it. Deep-copied
+     throughout: the delta's items live in the working
+     copy, and the closing state starts its own life as the
+     landing's standing copy. */
+  function windowCloseState(startState, delta, nowState) {
+    var out = JSON.parse(JSON.stringify(startState));
+    ["family", "pantry", "customRecipes", "extras", "events", "imports"].forEach(function (field) {
+      if (!Array.isArray(out[field])) out[field] = [];
+      var have = {};
+      out[field].forEach(function (it) { have[itemKey(it)] = true; });
+      (Array.isArray(delta[field]) ? delta[field] : []).forEach(function (it) { var k = itemKey(it); if (!have[k]) { out[field].push(JSON.parse(JSON.stringify(it))); have[k] = true; } });
+    });
+    if (!out.plan || typeof out.plan !== "object") out.plan = {};
+    Object.keys(delta.plan || {}).forEach(function (day) { out.plan[day] = JSON.parse(JSON.stringify(delta.plan[day])); });
+    ["doneItems", "hiddenItems"].forEach(function (field) {
+      if (!out[field] || typeof out[field] !== "object") out[field] = {};
+      Object.keys(delta[field] || {}).forEach(function (k) { out[field][k] = delta[field][k]; });
+    });
+    if (nowState && typeof nowState.accountName === "string" && nowState.accountName) out.accountName = nowState.accountName;
+    return out;
+  }
+
   /* Create a brand new account's profile from the designed empty
      state, carrying the name known by any road at that moment
      (the name on the Google or Apple profile, or none at all:
@@ -1449,8 +1523,14 @@
      its debounce had nowhere true to compose against (the night
      bisect's S1-B1/B2: the anchor plants, account B's member).
      Both landings below now re-read the working copy before
-     they set it.) */
-  function createProfile(store, user, gate, acctName) {
+     they set it. (App v59, the F-B21-2 cure: the offer road
+     also gains the plain road's closing discipline, scoped
+     to window work — see the closing push inside its branch
+     below. doorLive, the door-time working copy, arrives
+     from the resolution's entry (resolveFirst), the way
+     entryLive stands as this function's own parameter of
+     record.) */
+  function createProfile(store, user, gate, acctName, doorLive) {
     /* The working copy as the create begins: the offer
        road's stash below still measures the window against
        this. The plain road's merge no longer does (app v57,
@@ -1494,13 +1574,56 @@
            window's saves ride the import like the rest of it. */
         var nowOff = liveState();
         if (!windowDeltaEmpty(windowAdditions(entryLive, nowOff))) storage.set(A.guestCacheKey(), JSON.stringify(nowOff));
-        setLive(startBlank);
-        storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startBlank));
-        /* App v57 (clause 1 + the reload deferral): the owner
-           adopts the blank start too, and the reload parks
-           behind an open delete flow like every landing's. */
-        ownerAdopt(startBlank);
-        return dailyStamps(user, true);
+        /* THE CLOSING PUSH (app v59, the F-B21-2 cure — QA's
+           build 21 retest verdict, finding F-B21-2, and the
+           F-B21 bisect verdict's B4/B4b: the birth roads lost
+           the birth-window member again, 4 of 4 stagings, with
+           NO recorded deleting push — the loss is a
+           NEVER-WRITTEN. On this road the window work's only
+           server writer is the debounced push against the
+           still-null snapshot (the accidental create); when
+           that one write does not land, the blank create and
+           the device-side stash strand the work beyond every
+           later differ's sight — every later baseline is
+           built from a landing that never held it, so no push
+           can ever see it missing. The plain road never
+           stranded it: its Cure 5 merge push re-drives the
+           window's work in-chain. This road now carries the
+           same closing discipline, scoped to WINDOW work:
+           the delta measured from the door-time copy
+           (doorLive, captured at the resolution's entry)
+           against the working copy as the create lands. A
+           non-empty delta is pushed — the blank start plus
+           the delta — against the created documents, in this
+           chain, before the stamps and the reload, and the
+           closing state becomes the landing's standing copy
+           in all four copies (server, snapshot, live, cache),
+           so no later push can compose the delta back off.
+           The pre-door pot is NOT in the delta (it stands in
+           doorLive already) and still waits for the import
+           tap exactly as designed: the offer keeps its
+           meaning, and a quiet window fires no closing push. */
+        var windowDelta = windowAdditions(doorLive, nowOff);
+        if (windowDeltaEmpty(windowDelta)) {
+          setLive(startBlank);
+          storage.set(A.cacheKeyFor(user.uid), JSON.stringify(startBlank));
+          /* App v57 (clause 1 + the reload deferral): the owner
+             adopts the blank start too, and the reload parks
+             behind an open delete flow like every landing's. */
+          ownerAdopt(startBlank);
+          return dailyStamps(user, true);
+        }
+        var closeState = windowCloseState(startBlank, windowDelta, nowOff);
+        return A.pushAccount(store, user.uid, closeState, created, nowIso()).then(function (next) {
+          snapshot = next;
+          setLive(closeState);
+          storage.set(A.cacheKeyFor(user.uid), JSON.stringify(closeState));
+          /* App v57 (clause 1 + the reload deferral), as the
+             blank arm above: the owner adopts the closing
+             state, and the reload parks like every landing's. */
+          ownerAdopt(closeState);
+          return dailyStamps(user, true);
+        });
       }).then(function () { if (!reloadAfterLanding()) adopting = false; }), 30000);
     }
     var startState = blankState();
@@ -1799,8 +1922,13 @@
            standing, through baselineFrom, so state and
            baseline describe the same copy after the
            refresh and no later writer can compose the
-           deletion back. */
-        snapshot = baselineFrom(convergeLive(currentUser, docs2));
+           deletion back. (App v59, the F-B21-1 cure: the
+           helper also takes THIS pull, docs2, as the
+           carry's source — the baseline it returns is
+           field-complete at the profile, the seven
+           server-managed fields riding from the pull's
+           own profile; see baselineFrom.) */
+        snapshot = baselineFrom(convergeLive(currentUser, docs2), docs2);
       }, function () {});
     }, CONVERGENCE_RECHECK_MS);
   }
@@ -1911,8 +2039,14 @@
              state, and the first later writer composed the
              pair and undid the deletion. The baseline is now
              taken from the state the convergence leaves
-             standing, through baselineFrom.) */
-          snapshot = baselineFrom(convergeLive(user, docs, censusTripped ? { suppressReconcile: true } : undefined));
+             standing, through baselineFrom.) (App v59,
+             the F-B21-1 cure: the helper also takes the
+             pull itself, docs, as the carry's source —
+             on the heal continuation above, docs IS the
+             created documents, so the heal's own stamps
+             enter the baseline by this same line; see
+             baselineFrom.) */
+          snapshot = baselineFrom(convergeLive(user, docs, censusTripped ? { suppressReconcile: true } : undefined), docs);
           return A.syncTier(store, user.uid, { demo: false, source: "server" });
         }).then(function (t) {
           if (t) {
@@ -1965,6 +2099,17 @@
        v55, Cure F1): set at the adjudication below and read at
        the standing account branch's adoption. */
     var censusTripped = false;
+    /* The door-time working copy (app v59, the F-B21-2 cure —
+       the F-B21 bisect verdict): the pot of record as this
+       resolution begins, BEFORE the pull. On the offer road
+       the create's closing push measures the birth window
+       against this copy, so work done while signed in,
+       anywhere inside this resolution (the pull's flight
+       included), is window work the closing push must land;
+       what already stands here is pre-door work and keeps
+       the import offer's road exactly as designed. Captured
+       per run: a retry's re-run opens its own window. */
+    var doorLive = liveState();
     WAIT.bound(storePromise.then(function (store) {
       /* The server source again (app v50, Finding 2): a signup
          decision made on an offline empty answer would create a
@@ -2039,7 +2184,7 @@
               return dailyStamps(user, true);
             }).then(function () { if (!reloadAfterLanding()) adopting = false; }), 30000);
           }
-          return createProfile(store, user, gate, acctName);
+          return createProfile(store, user, gate, acctName, doorLive);
         }
         /* A census stand trip (app v55, Cure F1) adopts
            unreconciled, like the adopted road's convergence. A
