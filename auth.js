@@ -253,7 +253,17 @@
     return function swapTs(v) {
       if (v === "__MP_SERVER_TS__") return fb.firestore.FieldValue.serverTimestamp();
       if (Array.isArray(v)) return v.map(swapTs);
-      if (v && typeof v === "object") { var o = {}; Object.keys(v).forEach(function (k) { o[k] = swapTs(v[k]); }); return o; }
+      if (v && typeof v === "object") {
+        /* F-B22-1 (app v60): only PLAIN objects are rebuilt. An SDK
+           value object (a server-read Timestamp, a FieldValue) is a
+           class instance, and rebuilding it from its enumerable
+           keys re-types it as a plain {seconds, nanoseconds} map,
+           which the rules' write-once stamp clauses refuse whole.
+           Class instances pass through by reference, untouched. */
+        var proto = Object.getPrototypeOf(v);
+        if (proto !== Object.prototype && proto !== null) return v;
+        var o = {}; Object.keys(v).forEach(function (k) { o[k] = swapTs(v[k]); }); return o;
+      }
       return v;
     };
   }

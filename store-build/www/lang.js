@@ -509,7 +509,7 @@
     "door.pwFirst": "Type your password first, then continue.",
     "door.resetSent": " Password reset email sent. Follow its steps, then sign in here.",
     "door.genericLine": "That email and password did not work. Check them both and try again.",
-    "door.slowSignin": "Signing in is taking a long while. You can keep going as a guest, or try a door below.",
+    "door.slowSignin": "Signing in is taking a long while. You can wait here, or try one of the doors below.",
     "door.oneMoment": "One moment.",
     /* demo entries */
     "demo.exploreLine": "Explore the demo: a made up kitchen, seeded so you can try everything. Nothing in it is real, and deleting is off in the demo.",
@@ -1040,7 +1040,7 @@
     "door.pwFirst": "Escribe tu contraseña primero, y luego continúa.",
     "door.resetSent": " Correo de restablecimiento enviado. Sigue sus pasos y luego inicia sesión aquí.",
     "door.genericLine": "Ese correo y esa contraseña no funcionaron. Revisa los dos e inténtalo de nuevo.",
-    "door.slowSignin": "Iniciar sesión está tardando mucho. Puedes seguir como invitado o probar con las opciones de abajo.",
+    "door.slowSignin": "Iniciar sesión está tardando mucho. Puedes esperar aquí, o probar con una de las opciones de abajo.",
     "door.oneMoment": "Un momento.",
     "demo.exploreLine": "Explora la demo: una cocina inventada, preparada para que pruebes todo. Nada en ella es real, y borrar está apagado en la demo.",
     "demo.exploreBtn": "Explorar la demo",

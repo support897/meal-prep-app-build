@@ -4,12 +4,30 @@
 @font-face { font-family: "Nunito Sans"; src: url("vendor/fonts/NunitoSans.ttf") format("truetype"); font-weight: 200 1000; font-display: swap; }
 /* Meal Prep styles. iPhone app look: flat, calm, lots of air, one type ladder. */
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+/* No-zoom law (fleet-wide, 21 Oct 17:11): a double tap must
+   never zoom the app. The root rule's touch action is manipulation,
+   which turns off the double-tap zoom gesture only; panning
+   (scroll) and pinch behaviour are untouched, and taps land
+   without the old 300ms double-tap wait. The viewport meta
+   carries the matching half (maximum-scale=1, user-scalable=no). */
+html, body { margin: 0; padding: 0; touch-action: manipulation; }
 body { font-family: "Nunito Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--ground); color: var(--ink); }
 a { color: var(--accent-deep); }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
-#topStrip { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 11px; padding: 9px 16px; background: var(--ground); border-bottom: 1px solid var(--border); }
+/* Top-space law (fleet-wide, 21 Oct 17:08): the app chrome
+   honours the iPhone safe area at the top. The strip's top padding
+   grows by safe-area-inset-top, so the menu button lands fully
+   below the status bar and stays tappable on every iPhone shape
+   (notch, Dynamic Island, plain). The plain padding line stands
+   first as the fallback: where env() is unknown the calc line is
+   dropped and the old 9px stands; where there is no inset (desktop,
+   plain screens) env() reads 0 and the padding is unchanged. The
+   inset only has values because index.html's viewport meta carries
+   viewport-fit=cover. The same treatment rides the sidebar's
+   sticky offsets (below), the generic modal's padding, the door
+   page and the demo chip — each at its own rule. */
+#topStrip { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 11px; padding: 9px 16px; padding-top: calc(9px + env(safe-area-inset-top)); background: var(--ground); border-bottom: 1px solid var(--border); }
 .stripToggle { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--border2); background: var(--card); color: var(--accent-deep); display: flex; align-items: center; justify-content: center; }
 .stripToggle svg { width: 22px; height: 22px; }
 .stripLogo { width: 30px; height: 30px; border-radius: 8px; }
@@ -25,7 +43,7 @@ button { cursor: pointer; }
    beside the panel. Closed is fully gone at every width: zero pixels,
    hidden on every load, never remembered. There is no icon rail state
    anymore. */
-#sidebar { width: calc(100vw - 44px); flex: 0 0 calc(100vw - 44px); background: var(--sidebar); border-right: 1px solid var(--border); padding: 22px 16px; position: sticky; top: 53px; height: calc(100vh - 53px); overflow-y: auto; overflow-x: hidden; transition: width 0.23s ease-out, flex-basis 0.23s ease-out, padding 0.23s ease-out; }
+#sidebar { width: calc(100vw - 44px); flex: 0 0 calc(100vw - 44px); background: var(--sidebar); border-right: 1px solid var(--border); padding: 22px 16px; position: sticky; top: 53px; height: calc(100vh - 53px); top: calc(53px + env(safe-area-inset-top)); height: calc(100vh - 53px - env(safe-area-inset-top)); overflow-y: auto; overflow-x: hidden; transition: width 0.23s ease-out, flex-basis 0.23s ease-out, padding 0.23s ease-out; }
 body.sidebarHidden #sidebar { width: 0; flex: 0 0 0; padding-left: 0; padding-right: 0; border-right: 0; overflow: hidden; visibility: hidden; transition: width 0.23s ease-out, flex-basis 0.23s ease-out, padding 0.23s ease-out, visibility 0s linear 0.23s; }
 /* Phone shape while open: the page sits compressed beside the menu, clipped
    so it reads as a sliver; app.js turns any tap on it into a close, so the
@@ -191,7 +209,7 @@ select.swapSel { margin-top: 10px; }
 .fresh { color: var(--fresh); font-weight: 700; }
 .miniBtn { border: 1px solid var(--inputline); background: var(--card); color: var(--ink); border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .groupTitle { font-size: 18px; font-weight: 700; margin: 20px 0 10px; }
-.modal { position: fixed; inset: 0; background: rgba(17, 24, 39, 0.48); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 28px 14px; z-index: 50; }
+.modal { position: fixed; inset: 0; background: rgba(17, 24, 39, 0.48); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 28px 14px; padding-top: calc(28px + env(safe-area-inset-top)); padding-bottom: calc(28px + env(safe-area-inset-bottom)); z-index: 50; }
 .modal.hidden, .hidden { display: none !important; }
 .modalCard { background: var(--card); border-radius: 16px; padding: 28px; max-width: 720px; width: 100%; }
 .modalCard.small { max-width: 520px; }
@@ -208,7 +226,11 @@ select.swapSel { margin-top: 10px; }
   #main { padding: 20px 14px 50px; }
   .monthGrid { grid-template-columns: repeat(7, 1fr); gap: 4px; }
   .dayCell { min-height: 62px; padding: 4px; }
-  .mealChip { font-size: 9px; padding: 2px 3px; }
+  /* v60 (Polar M2): at phone widths a month column lands near 48px
+     and the old 9px chip text wrapped a recipe name over four or
+     five lines. The chip now shows at most two lines and ellipsises;
+     the tap on the chip still opens the full recipe, name whole. */
+  .mealChip { font-size: 10px; padding: 2px 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .weekHead { font-size: 9px; }
   .weekGrid { grid-template-columns: 1fr; }
   .dayMeals, .recipeGrid, .yearGrid, .grid2 { grid-template-columns: 1fr; }
@@ -302,15 +324,25 @@ body[data-photo-mode="dark"] #bgVeil { background: #241812; opacity: 0.89; }
    Guide card pieces read the theme tokens, so the guide holds up in all
    four Law E themes. Poses are sized by width (brand-board/guide-poses). */
 .guideCard { max-width: 560px; }
+/* v60 (Polar M1): the card is capped inside the viewport and scrolls
+   ITSELF. A card taller than the screen (the table stop is the tall
+   one), centred in the modal's flex row, overflowed above the scroll
+   origin: its top, Mina, the title and the X, sat under the status
+   bar where no scroll could reach. The cap is the viewport minus the
+   modal's own 28px top and bottom padding and the safe areas; the
+   100vh line is the fallback, the 100dvh line the live rule. */
+#guideModal .guideCard { max-height: calc(100vh - 56px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height: calc(100dvh - 56px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; }
 /* v33: the tour pop-up sits in the MIDDLE of the screen, the app
-   visible behind the modal dim. */
-#guideModal { align-items: center; }
+   visible behind the modal dim. v60: the modal's own padding grows
+   by the safe areas, so the centred card never tucks under the
+   status bar or the home indicator. */
+#guideModal { align-items: center; padding: calc(28px + env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom)); }
 .tourTitle { font-size: 24px; line-height: 1.25; margin: 14px 0 0; }
 /* v33: the door page. A full first page holding only the sign up,
    big and centred, the app waiting behind it. Board tokens only, so
    it holds in all four Law E themes. The foot entries are lines of
    quiet text, never buttons or form chrome. */
-.doorPage { position: fixed; inset: 0; z-index: 70; background: var(--ground); overflow-y: auto; display: flex; align-items: center; justify-content: center; padding: 28px 16px; }
+.doorPage { position: fixed; inset: 0; z-index: 70; background: var(--ground); overflow-y: auto; display: flex; align-items: center; justify-content: center; padding: 28px 16px; padding-top: calc(28px + env(safe-area-inset-top)); padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
 .doorInner { width: 100%; max-width: 380px; text-align: center; }
 .doorMark { width: 120px; height: 120px; border-radius: 28px; display: block; margin: 0 auto 10px; }
 .doorName { font-family: "Fraunces", serif; font-size: 34px; font-weight: 700; margin: 0 0 4px; }
@@ -383,4 +415,4 @@ body[data-photo-mode="dark"] #bgVeil { background: #241812; opacity: 0.89; }
    A demo session is labelled on every screen (DEMO-ACCOUNT-SPEC):
    account-sync.js puts demoOn on the body while one runs. */
 .cardInner { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 10px 0; }
-body.demoOn::before { content: "Demo"; position: fixed; top: 10px; right: 12px; z-index: 60; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+body.demoOn::before { content: "Demo"; position: fixed; top: 10px; top: calc(10px + env(safe-area-inset-top)); right: 12px; z-index: 60; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }

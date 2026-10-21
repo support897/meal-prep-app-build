@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Meal Prep</title>
 <meta name="theme-color" content="#B3401E">
 <link rel="manifest" href="manifest.webmanifest">
@@ -215,7 +215,8 @@
       <div class="card">
         <h2 data-i18n="groc.photoTitle">Photo of your fridge or groceries</h2>
         <p class="hint" data-i18n="groc.photoHint">Add a photo and the app helps name what is in it. The photo never leaves your device. A photo cannot weigh food, so you confirm each amount before it saves.</p>
-        <input id="fridgePhoto" type="file" accept="image/*">
+        <div class="row"><button id="fridgePhotoBtn" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg> <span data-i18n="appear.choosePhoto">Choose a photo</span></button></div>
+        <input id="fridgePhoto" type="file" accept="image/*" class="hidden">
         <div id="photoPreview"></div>
         <button id="photoScan" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg> <span data-i18n="groc.lookPhoto">Look at my photo</span></button>
         <p class="hint hidden" id="gateLinePhoto"></p>
@@ -369,7 +370,8 @@
       <div class="card">
         <h2 data-i18n="photocal.cardTitle">Photo of food</h2>
         <p class="hint" data-i18n="photocal.cardHint">Add a photo of food and the app names what it can see. The photo never leaves your device.</p>
-        <input id="calPhoto" type="file" accept="image/*">
+        <div class="row"><button id="calPhotoBtn" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg> <span data-i18n="appear.choosePhoto">Choose a photo</span></button></div>
+        <input id="calPhoto" type="file" accept="image/*" class="hidden">
         <div id="calPhotoPreview"></div>
         <button id="calPhotoScan" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg> <span data-i18n="groc.lookPhoto">Look at my photo</span></button>
         <p class="hint" data-i18n="legal.photoCalorieNote">A photo cannot weigh food. These numbers are a rough guess based on a typical serving.</p>

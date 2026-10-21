@@ -981,6 +981,10 @@
   }
   /* Fridge photo */
   let photoDataUrl = "";
+  /* v60 (Polar M4): the file input itself is hidden (the house shape,
+     the background photo and the import already ride it); this styled
+     button is the picker, so the raw browser control never shows. */
+  $("fridgePhotoBtn").addEventListener("click", function () { $("fridgePhoto").click(); });
   $("fridgePhoto").addEventListener("change", function () {
     const f = $("fridgePhoto").files[0]; if (!f) return;
     const reader = new FileReader();
@@ -1046,6 +1050,8 @@
      are estimates for a typical serving of the food the model names, with a
      plus or minus 30 percent range, because a photo cannot weigh food. */
   let calPhotoDataUrl = "";
+  /* v60 (Polar M4): the styled button picks; the input stays hidden. */
+  $("calPhotoBtn").addEventListener("click", function () { $("calPhoto").click(); });
   $("calPhoto").addEventListener("change", function () {
     const f = $("calPhoto").files[0]; if (!f) return;
     const reader = new FileReader();
@@ -1814,7 +1820,9 @@
         state.guideState = Object.assign({}, state.guideState, { status: "inProgress", step: 5, v: 2 }); save();
         $("guideModal").classList.add("hidden");
         switchView("groceries");
-        $("fridgePhoto").scrollIntoView({ block: "center" });
+        /* v60 (Polar M4): the scroll lands on the visible picker
+           button; the hidden input has no box to scroll to. */
+        $("fridgePhotoBtn").scrollIntoView({ block: "center" });
       });
     } else if (step === 6) {
       const planned = planHasMeals();

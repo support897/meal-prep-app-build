@@ -84,7 +84,7 @@
      first auth answer has landed, whether the watchdog had to
      land the door itself, and whether the person took the guest
      exit from that watchdog door. */
-  var authAnswered = false, watchdogLanded = false, preAnswerGuestExit = false;
+  var authAnswered = false, watchdogLanded = false;
   var storePromise = provider.store();
   var device = A.readDevice(storage);
   var currentUser = null;
@@ -238,7 +238,6 @@
       "<p class='doorMsg' id='doorMsg'></p>" +
       "<div class='doorFoot'>" +
       "<button class='doorFootLine' id='doorDemoLine'>" + t("door.demoLine") + "</button>" +
-      "<button class='doorFootLine' id='doorGuestLine'>" + t("door.guestLine") + "</button>" +
       "</div>" +
       "<div id='doorDemoBlock'></div>";
     document.getElementById("doorGoogle").addEventListener("click", function () { doorSocial("google", this); });
@@ -254,14 +253,13 @@
     }
     document.getElementById("doorNext").addEventListener("click", goNext);
     input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); goNext(); } });
-    document.getElementById("doorGuestLine").addEventListener("click", function () {
-      /* A guest exit taken while the boot watchdog's door stands
-         (before the first auth answer) is remembered, so the late
-         signed out answer does not land the door again over a
-         person who already chose the guest road (app v49, U1). */
-      if (watchdogLanded && !authAnswered) preAnswerGuestExit = true;
-      hideDoorPage();
-    });
+    /* Account mandatory (fleet ruling, 21 Oct): the guest line
+       that stood beside the demo line here is gone, rendering and
+       handler both. There is no road past this page except a
+       door; the guest pot a person already holds on this device
+       is still offered for import after they sign in. The demo
+       line stands (HQ ruling, 21 Oct 17:20): one quiet line at
+       the foot is the review path, not stacked furniture. */
     document.getElementById("doorDemoLine").addEventListener("click", function () { renderDoorDemo(); });
   }
   function renderDoorStep2() {
@@ -2318,11 +2316,10 @@
      door never shown at all. If no first answer has landed within
      15 seconds of the listener registering, the door lands anyway,
      in its signed out shape, with the honest slow line, and every
-     road on it stays live: the guest exit works (and is remembered,
-     below), the social doors run under their own bounds, and the
-     email walk runs. A late answer still resolves the session
-     normally: onUser re-renders over the watchdog's landing and
-     the line goes with the old door. */
+     door on it stays live: the social doors run under their own
+     bounds, and the email walk runs. A late answer still resolves
+     the session normally: onUser re-renders over the watchdog's
+     landing and the line goes with the old door. */
   var doorWatchdog = setTimeout(function () {
     if (authAnswered) return;
     watchdogLanded = true;
@@ -2334,10 +2331,6 @@
   }, 15000);
   window.MP_AUTH.onChange(function (user) {
     if (!authAnswered) { authAnswered = true; clearTimeout(doorWatchdog); }
-    /* A guest exit taken from the watchdog's door stands: the late
-       signed out answer refreshes the card behind the app instead
-       of landing the door again. */
-    if (!user && watchdogLanded && preAnswerGuestExit) { renderSignedOut(""); return; }
     onUser(user);
     if (user && !user.isAnonymous) maybeOfferImport(user);
   });
