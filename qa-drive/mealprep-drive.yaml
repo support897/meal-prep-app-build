@@ -1,4 +1,8 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v31 (2026-10-24) — the fill branch's polls lose
+# their inner waits; the empty-line judge moves to the top
+# level at 180 s (drive 30: a fatal wait inside the branch
+# runFlow skipped the second poll).
 # Version: v30 (2026-10-24) — the first "Recipes" attempt at
 # BOTH entries moves inside a visible-keyed runFlow (drive
 # 29: the fatal tapOn died on an eaten toggle).
@@ -393,6 +397,19 @@ appId: com.ilseplacencia.mealprep
     visible:
       text: "Bring my calendar in"
     timeout: 60000
+# DRIVE 30 (run 40035692281) died inside the FIRST branch
+# poll, step-042: its inner notVisible wait timed out and —
+# per the corrected runFlow law (NeedsMe drive 22) — a failed
+# WAIT inside a runFlow is FATAL to the whole flow, so the
+# second poll never ran. The death hierarchy still holds the
+# empty line: the branch's tap was eaten or the generation
+# outran 60 s; either way the recovery was skipped by the
+# wait's fatality. Cure (v31): the branch polls carry NO
+# inner wait — they only tap — and the judge moves to the
+# top level behind them, widened to 180 s (the fill is a
+# generation; the slow-channel disease applies). When the
+# month already stands, the line is already gone and the
+# judge passes at once.
 - runFlow:
     when:
       visible: "No meals planned yet."
@@ -401,10 +418,7 @@ appId: com.ilseplacencia.mealprep
       - tapOn:
           text: "Plan my first month"
           waitUntilVisible: true
-      - extendedWaitUntil:
-          notVisible:
-            text: "No meals planned yet."
-          timeout: 60000
+      - waitForAnimationToEnd
 - waitForAnimationToEnd
 - runFlow:
     when:
@@ -414,10 +428,11 @@ appId: com.ilseplacencia.mealprep
       - tapOn:
           text: "Plan my first month"
           waitUntilVisible: true
-      - extendedWaitUntil:
-          notVisible:
-            text: "No meals planned yet."
-          timeout: 60000
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    notVisible:
+      text: "No meals planned yet."
+    timeout: 180000
 - takeScreenshot: 07-month-filled
 - runFlow:
     when:
