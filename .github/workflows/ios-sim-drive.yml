@@ -124,6 +124,7 @@ jobs:
           TEST_EMAIL2: "placenciailse.qa.mealprep2@gmail.com"
           TEST_PASSWORD2: ${{ secrets.QA_MEALPREP_TEST_PASSWORD2 }}
           MAESTRO_DRIVER_START_TIMEOUT: "180"
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: "600000"
         run: |
           maestro test \
             -e TEST_EMAIL="$TEST_EMAIL" \
