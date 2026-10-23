@@ -450,11 +450,31 @@ appId: com.ilseplacencia.mealprep
             text: "Hi! I'm Mina. Welcome in! What should we call you?"
           timeout: 30000
 # ---------- stage (ii)b: an own recipe under the sentinel name ------
+# DRIVE 22 (run 40006900542) died at the "Add your recipe"
+# judge below, step-051: the frame stands on the Calendar at
+# its top — this entry's "Recipes" tap raced the just-filled
+# month grid exactly as drive 21's relogin entry did. The
+# v22 cure (settles + the destination-keyed retry) now stands
+# at BOTH Recipes entries off the calendar; the DOWN swipes
+# below then top whichever page stands, harmless on both.
 - tapOn:
     text: "Hide or show the side menu"
+- waitForAnimationToEnd
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible: "Your recipes"
+    commands:
+      - tapOn:
+          text: "Hide or show the side menu"
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "Recipes"
+          waitUntilVisible: true
+      - waitForAnimationToEnd
 # PAGE-TOP REFRESH (drive 15, run 39980492964): the Recipes page
 # stood scrolled a shade too deep at entry — the section's own
 # h2 "Add your recipe" sat just above the rendered band while its
