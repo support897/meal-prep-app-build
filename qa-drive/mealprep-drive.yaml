@@ -575,6 +575,17 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Preferences"
     waitUntilVisible: true
+# DRIVE 20 (run 40000099165) died at this wait, step-071:
+# the Preferences page is long and the account card sits far
+# below the reminders section; the wait never scrolls, and
+# below-fold content never enters the visible tree (the Fit
+# v15 starvation, same family). Named-node travel first, as
+# TRANSPORT (the v19 law); the wait stays the judge.
+- scrollUntilVisible:
+    element:
+      text: "Sign out"
+    direction: DOWN
+    timeout: 60000
 - extendedWaitUntil:
     visible:
       text: "Sign out"
@@ -691,6 +702,17 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Preferences"
     waitUntilVisible: true
+# DRIVE 20 (run 40000099165) died at this wait, step-071:
+# the Preferences page is long and the account card sits far
+# below the reminders section; the wait never scrolls, and
+# below-fold content never enters the visible tree (the Fit
+# v15 starvation, same family). Named-node travel first, as
+# TRANSPORT (the v19 law); the wait stays the judge.
+- scrollUntilVisible:
+    element:
+      text: "Sign out"
+    direction: DOWN
+    timeout: 60000
 - extendedWaitUntil:
     visible:
       text: "Sign out"
