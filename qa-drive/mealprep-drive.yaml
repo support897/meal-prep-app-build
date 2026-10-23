@@ -1,4 +1,17 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v5 (2026-10-23) — v4 FAILED-INSTRUMENT at drive 4 (run
+# 39947093298, step-016): the door advance PROVED (the step-2 frame
+# stands with the tester's address echoed in its card — the v4
+# ghost cure held), then the password inputText raced into nothing
+# (the FOCUS RACE, this door's first bite): the field stood empty,
+# Continue met it, and the app answered honestly "Type your
+# password first, then continue." v5 cures the three password legs:
+# the field tap gains retryTapIfNoChange + waitForAnimationToEnd
+# before the type, the blind accessory-Done tap is REMOVED from the
+# password legs, and a conditional recovery follows the first
+# Continue — if the app's empty-field line stands, the leg re-taps,
+# re-types, dismisses, and submits again. The email legs stand as
+# twice-proven. v4: 11,982 B.
 # Version: v4 (2026-10-23) — v3 FAILED-INSTRUMENT at drive 3 (run
 # 39945885637, step-011): the renamed "Next" tap FOUND a node and
 # passed, yet the door never advanced — the step-011 hierarchy
