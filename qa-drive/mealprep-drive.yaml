@@ -1,5 +1,5 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
-# Version: v27 (2026-10-24) — v12's STAGGER CURE LANDED on
+# Version: v28 (2026-10-24) — v12's STAGGER CURE LANDED on
 # drive 12 (run 39968772962): a handler poll FIRED (the
 # step-026 runFlow frame stands) and the card was met at the
 # ENTRY site — but the handler died at its "Save" tap
@@ -836,17 +836,46 @@ appId: com.ilseplacencia.mealprep
 # heading, present in that hierarchy and absent from the
 # calendar's: both retries and the judge re-key to it (v26).
 - waitForAnimationToEnd
+# DRIVE 27 (run 40023485679) died at the card judge below,
+# step-135, standing on the FULL CALENDAR: all three nav
+# attempts at this entry were eaten, and the blind retry
+# pair toggles against itself (if the first toggle opened
+# the sidebar and its Recipes tap was eaten, the retry's
+# toggle CLOSES it and its own Recipes tap fails silently
+# inside the runFlow). This entry also never carried the
+# fatal destination judge the first entry got in v25.
+# Cure (v28): the second retry is STATE-AWARE — it taps
+# Recipes directly while the sidebar item stands, and
+# re-opens first only while it does not — and the fatal
+# "My own recipe" judge now stands at this entry too, so
+# a navigation that never lands dies at the navigation.
 - runFlow:
     when:
       notVisible: "My own recipe"
     commands:
-      - tapOn:
-          text: "Hide or show the side menu"
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "Recipes"
-          waitUntilVisible: true
-      - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible: "Recipes"
+          commands:
+            - tapOn:
+                text: "Recipes"
+                waitUntilVisible: true
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            notVisible: "Recipes"
+          commands:
+            - tapOn:
+                text: "Hide or show the side menu"
+            - waitForAnimationToEnd
+            - tapOn:
+                text: "Recipes"
+                waitUntilVisible: true
+            - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      text: "My own recipe"
+    timeout: 30000
 - extendedWaitUntil:
     visible:
       text: "DINNER Sim drive meal one 30 minutes · 1 ingredients"
