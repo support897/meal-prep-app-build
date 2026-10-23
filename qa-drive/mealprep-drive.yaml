@@ -1,4 +1,16 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v3 (2026-10-23) — v2 FAILED-INSTRUMENT at drive 2 (run
+# 39943226253, step-010): the door advance tapOn text "→" never
+# matched — the failure hierarchy holds the glyph ZERO times and
+# "Next" TWICE; the arrow button's accessible name is "Next" and
+# the glyph is drawn art, not tree text (the v1 NOTES' flagged
+# fallback, now promoted to primary on proof). The email HAD
+# landed and the door's own hideKeyboard had passed — neither the
+# focus race nor the accessory class bit this door. v3 cures:
+# (a) all three door advances (sign-up · sign-in · account 2) tap
+# text "Next"; (b) the fleet hideKeyboard cure applied to the 10
+# remaining bare sites prophylactically (deeper forms untested;
+# every site follows an inputText by construction). v2: 10,160 B.
 # The FINISHING ORDER spine for candidate 24's simulator copy
 # (bundle com.ilseplacencia.mealprep, build 24, SW mealprep-v61; the
 # copy's byte-leg pins stand in store-uploads/scratch/mealprep-sim/
@@ -40,16 +52,18 @@ appId: com.ilseplacencia.mealprep
     text: "you@example.com"
     waitUntilVisible: true
 - inputText: "${TEST_EMAIL}"
-- hideKeyboard
+- tapOn:
+    point: "90%, 62%"
 - takeScreenshot: 02-email-step
 - tapOn:
-    text: "→"
+    text: "Next"
     waitUntilVisible: true
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
 - inputText: "${TEST_PASSWORD}"
-- hideKeyboard
+- tapOn:
+    point: "90%, 62%"
 - takeScreenshot: 03-password-step
 - tapOn:
     text: "Continue"
@@ -85,7 +99,8 @@ appId: com.ilseplacencia.mealprep
           text: "Your name"
           waitUntilVisible: true
       - inputText: "Sim Driver"
-      - hideKeyboard
+      - tapOn:
+          point: "90%, 62%"
       - tapOn:
           text: "Save"
           waitUntilVisible: true
@@ -133,7 +148,8 @@ appId: com.ilseplacencia.mealprep
     text: "Cook the chicken until golden"
     waitUntilVisible: true
 - inputText: "Cook the chicken until golden"
-- hideKeyboard
+- tapOn:
+    point: "90%, 62%"
 - takeScreenshot: 08-recipe-form
 - tapOn:
     text: "Save my recipe"
@@ -169,15 +185,17 @@ appId: com.ilseplacencia.mealprep
     text: "you@example.com"
     waitUntilVisible: true
 - inputText: "${TEST_EMAIL}"
-- hideKeyboard
 - tapOn:
-    text: "→"
+    point: "90%, 62%"
+- tapOn:
+    text: "Next"
     waitUntilVisible: true
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
 - inputText: "${TEST_PASSWORD}"
-- hideKeyboard
+- tapOn:
+    point: "90%, 62%"
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
@@ -202,7 +220,8 @@ appId: com.ilseplacencia.mealprep
           text: "Your name"
           waitUntilVisible: true
       - inputText: "Sim Driver"
-      - hideKeyboard
+      - tapOn:
+          point: "90%, 62%"
       - tapOn:
           text: "Save"
           waitUntilVisible: true
@@ -254,15 +273,17 @@ appId: com.ilseplacencia.mealprep
     text: "you@example.com"
     waitUntilVisible: true
 - inputText: "${TEST_EMAIL2}"
-- hideKeyboard
 - tapOn:
-    text: "→"
+    point: "90%, 62%"
+- tapOn:
+    text: "Next"
     waitUntilVisible: true
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
 - inputText: "${TEST_PASSWORD2}"
-- hideKeyboard
+- tapOn:
+    point: "90%, 62%"
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
@@ -289,7 +310,8 @@ appId: com.ilseplacencia.mealprep
           text: "Your name"
           waitUntilVisible: true
       - inputText: "Sim Driver"
-      - hideKeyboard
+      - tapOn:
+          point: "90%, 62%"
       - tapOn:
           text: "Save"
           waitUntilVisible: true
