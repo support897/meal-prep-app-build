@@ -1,4 +1,20 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v6 (2026-10-23) — v5 FAILED-INSTRUMENT at drive 5 (run
+# 39950034970, step-022, the post-Continue door-gone wait): the
+# focus race beat the hardening a second time — the recovery RAN
+# and still could not land the type, and its own dismissal tap
+# (90%, 62%) landed on this door's password-field Show/Hide
+# toggle (the failure frame: the toggle flipped to "Hide", the
+# field empty in clear mode, the honest line standing). v6: (1)
+# every password type (3 legs + 3 recoveries) gains a LANDING
+# PROOF — a filled secure field exposes its bullets in the tree
+# (proven on NeedsMe drive 3's hierarchy), waited on for 15 s
+# before any Continue; (2) the recovery blocks lose their blind
+# dismissal tap entirely (the dismissal-point hazard, second
+# offence — the amended law already forbade it where the
+# keyboard is unproven). The 7 remaining (90%, 62%) taps all sit
+# in email/name legs where the keyboard stands by construction.
+# v5: 14,640 B.
 # Version: v5 (2026-10-23) — v4 FAILED-INSTRUMENT at drive 4 (run
 # 39947093298, step-016): the door advance PROVED (the step-2 frame
 # stands with the tester's address echoed in its card — the v4
@@ -91,6 +107,13 @@ appId: com.ilseplacencia.mealprep
     retryTapIfNoChange: true
 - waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD}"
+# LANDING PROOF (drive 5): a filled secure field exposes its
+# bullets in the tree (proven on NeedsMe drive 3's hierarchy,
+# 20 bullets standing) — wait for them before Continue is tapped.
+- extendedWaitUntil:
+    visible:
+      text: "•"
+    timeout: 15000
 - takeScreenshot: 03-password-step
 - tapOn:
     text: "Continue"
@@ -108,8 +131,10 @@ appId: com.ilseplacencia.mealprep
           retryTapIfNoChange: true
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD}"
-      - tapOn:
-          point: "90%, 62%"
+      - extendedWaitUntil:
+          visible:
+            text: "•"
+          timeout: 15000
       - tapOn:
           text: "Continue"
           waitUntilVisible: true
@@ -240,6 +265,13 @@ appId: com.ilseplacencia.mealprep
     retryTapIfNoChange: true
 - waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD}"
+# LANDING PROOF (drive 5): a filled secure field exposes its
+# bullets in the tree (proven on NeedsMe drive 3's hierarchy,
+# 20 bullets standing) — wait for them before Continue is tapped.
+- extendedWaitUntil:
+    visible:
+      text: "•"
+    timeout: 15000
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
@@ -256,8 +288,10 @@ appId: com.ilseplacencia.mealprep
           retryTapIfNoChange: true
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD}"
-      - tapOn:
-          point: "90%, 62%"
+      - extendedWaitUntil:
+          visible:
+            text: "•"
+          timeout: 15000
       - tapOn:
           text: "Continue"
           waitUntilVisible: true
@@ -345,6 +379,10 @@ appId: com.ilseplacencia.mealprep
     retryTapIfNoChange: true
 - waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD2}"
+- extendedWaitUntil:
+    visible:
+      text: "•"
+    timeout: 15000
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
@@ -361,8 +399,10 @@ appId: com.ilseplacencia.mealprep
           retryTapIfNoChange: true
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD2}"
-      - tapOn:
-          point: "90%, 62%"
+      - extendedWaitUntil:
+          visible:
+            text: "•"
+          timeout: 15000
       - tapOn:
           text: "Continue"
           waitUntilVisible: true
