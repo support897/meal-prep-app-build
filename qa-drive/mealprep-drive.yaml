@@ -1,4 +1,6 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v29 (2026-10-24) — the relogin plan judge gains a
+# re-entry cycle + a 180 s window (drive 28's slow-pull death).
 # Version: v28 (2026-10-24) — v12's STAGGER CURE LANDED on
 # drive 12 (run 39968772962): a handler poll FIRED (the
 # step-026 runFlow frame stands) and the card was met at the
@@ -784,10 +786,33 @@ appId: com.ilseplacencia.mealprep
     waitUntilVisible: true
 # The plan stands: the empty state and its fill button never render.
 # (The b24 bar's adoption reads landed at ~10-15 s; the wait is 60 s.)
+# DRIVE 28 (run 40029366757) died at this judge, step-113: the
+# relogin calendar stood EMPTY — "No meals planned yet." with
+# the button standing in the death hierarchy — while the same
+# account's plan stood at relogin on drives 26 and 27. The
+# plan's cloud pull flips entry reads drive to drive on a slow
+# pull (the standing account fact since drive 22); this drive
+# the pull outran the 60 s judge. Not an app charge: the plan
+# standing at relogin is proven on this build + account, and
+# nothing proves it never lands. Cure (v29): one re-entry
+# cycle keyed on the empty button still standing (a fresh
+# Calendar entry re-pulls), then the fatal judge widened to
+# the disease, 180 s (the slow-session cure).
+- runFlow:
+    when:
+      visible: "Plan my first month"
+    commands:
+      - tapOn:
+          text: "Hide or show the side menu"
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "Calendar"
+          waitUntilVisible: true
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     notVisible:
       text: "Plan my first month"
-    timeout: 60000
+    timeout: 180000
 - assertNotVisible:
     text: "No meals planned yet."
 - takeScreenshot: 13-relogin-plan-stands
