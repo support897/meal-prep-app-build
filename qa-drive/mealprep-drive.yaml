@@ -686,11 +686,33 @@ appId: com.ilseplacencia.mealprep
 - assertNotVisible:
     text: "No meals planned yet."
 - takeScreenshot: 13-relogin-plan-stands
+# DRIVE 21 (run 40003841754) died at the composed wait below,
+# step-102: the frame stands on the Calendar, sidebar closed,
+# the month grid full — the "Recipes" tap executed while the
+# heavy grid was still painting and navigation never took
+# (the sidebar closed; the page never changed). SIDEBAR-TAP
+# RACE, third app. Cure: settles around the tap, plus one
+# retry keyed on the destination heading's ABSENCE (the Fit
+# runFlow notVisible shape) — it fires only while "Your
+# recipes" does not stand, and re-runs the same navigation.
 - tapOn:
     text: "Hide or show the side menu"
+- waitForAnimationToEnd
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible: "Your recipes"
+    commands:
+      - tapOn:
+          text: "Hide or show the side menu"
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "Recipes"
+          waitUntilVisible: true
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       text: "DINNER Sim drive meal one 30 minutes · 1 ingredients"
