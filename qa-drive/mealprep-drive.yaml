@@ -494,7 +494,7 @@ appId: com.ilseplacencia.mealprep
 - waitForAnimationToEnd
 - runFlow:
     when:
-      notVisible: "Your recipes"
+      notVisible: "My own recipe"
     commands:
       - tapOn:
           text: "Hide or show the side menu"
@@ -512,10 +512,18 @@ appId: com.ilseplacencia.mealprep
 # first entry judges the destination heading FATALLY before
 # the page-top swipes — a navigation that never landed dies at
 # the navigation, not mid-form.
+# DRIVE 25 (run 40015494945) CORRECTION: the judge's first key,
+# "Your recipes", names NO node on the landed page (drive 25's
+# failure hierarchy is the Recipes page whole — form rendered —
+# and holds no such node; the retries' notVisible key was
+# therefore permanently true and they always fired). The true
+# destination furniture is "My own recipe", the form's own
+# heading, present in that hierarchy and absent from the
+# calendar's: both retries and the judge re-key to it (v26).
 - waitForAnimationToEnd
 - runFlow:
     when:
-      notVisible: "Your recipes"
+      notVisible: "My own recipe"
     commands:
       - tapOn:
           text: "Hide or show the side menu"
@@ -526,7 +534,7 @@ appId: com.ilseplacencia.mealprep
       - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
-      text: "Your recipes"
+      text: "My own recipe"
     timeout: 60000
 # PAGE-TOP REFRESH (drive 15, run 39980492964): the Recipes page
 # stood scrolled a shade too deep at entry — the section's own
@@ -777,7 +785,7 @@ appId: com.ilseplacencia.mealprep
 - waitForAnimationToEnd
 - runFlow:
     when:
-      notVisible: "Your recipes"
+      notVisible: "My own recipe"
     commands:
       - tapOn:
           text: "Hide or show the side menu"
@@ -795,10 +803,18 @@ appId: com.ilseplacencia.mealprep
 # first entry judges the destination heading FATALLY before
 # the page-top swipes — a navigation that never landed dies at
 # the navigation, not mid-form.
+# DRIVE 25 (run 40015494945) CORRECTION: the judge's first key,
+# "Your recipes", names NO node on the landed page (drive 25's
+# failure hierarchy is the Recipes page whole — form rendered —
+# and holds no such node; the retries' notVisible key was
+# therefore permanently true and they always fired). The true
+# destination furniture is "My own recipe", the form's own
+# heading, present in that hierarchy and absent from the
+# calendar's: both retries and the judge re-key to it (v26).
 - waitForAnimationToEnd
 - runFlow:
     when:
-      notVisible: "Your recipes"
+      notVisible: "My own recipe"
     commands:
       - tapOn:
           text: "Hide or show the side menu"
