@@ -1,4 +1,17 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v10 (2026-10-23) — v9 TRAVELLED THE WHOLE DOOR on
+# drive 9 (run 39959325500): the email proved, the password
+# landed by its own outcome, the submit fired, the account
+# was created (REST at QA: uid 16eRwlJSmPRFPt87oYcxEyBAT6S2,
+# signed in with the cast's rotated value — the re-seal
+# discriminator SETTLED: QA_MEALPREP_TEST_PASSWORD holds the
+# new seal), Mina's tour was skipped, and the home stood clean
+# (05). Death at step-028, the flow's one unsourced selector:
+# id: "sidebarToggle" matches nothing — the DOM-ID law, third
+# door. The step-028 hierarchy names the toggle: accessibility
+# label "Hide or show the side menu", bounds [16,71][56,111].
+# v10 re-addresses all eight toggle taps to that tree name.
+# Account A now EXISTS: drive 10 signs in first.
 # Version: v9 (2026-10-23) — v8's cures HELD WHOLE on drive 8
 # (run 39956274624): the email landed and stood proven, the
 # password typed and FILLED (the failure frame shows 20 bullets
@@ -226,7 +239,7 @@ appId: com.ilseplacencia.mealprep
 # The sidebar starts hidden; its toggle is icon-only (no visible
 # text exists — the flow addresses it by its DOM id; see NOTES).
 - tapOn:
-    id: "sidebarToggle"
+    text: "Hide or show the side menu"
 - tapOn:
     text: "Calendar"
     waitUntilVisible: true
@@ -245,7 +258,7 @@ appId: com.ilseplacencia.mealprep
 - takeScreenshot: 07-month-filled
 # ---------- stage (ii)b: an own recipe under the sentinel name ------
 - tapOn:
-    id: "sidebarToggle"
+    text: "Hide or show the side menu"
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
@@ -280,7 +293,7 @@ appId: com.ilseplacencia.mealprep
 # The account card lives in Preferences; the b24 bar measured its
 # render at ~25-30 s after entry on the interior, so the wait is 90 s.
 - tapOn:
-    id: "sidebarToggle"
+    text: "Hide or show the side menu"
 - tapOn:
     text: "Preferences"
     waitUntilVisible: true
@@ -371,7 +384,7 @@ appId: com.ilseplacencia.mealprep
           waitUntilVisible: true
 - takeScreenshot: 12-relogin-inside
 - tapOn:
-    id: "sidebarToggle"
+    text: "Hide or show the side menu"
 - tapOn:
     text: "Calendar"
     waitUntilVisible: true
@@ -385,7 +398,7 @@ appId: com.ilseplacencia.mealprep
     text: "No meals planned yet."
 - takeScreenshot: 13-relogin-plan-stands
 - tapOn:
-    id: "sidebarToggle"
+    text: "Hide or show the side menu"
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
@@ -396,7 +409,7 @@ appId: com.ilseplacencia.mealprep
 - takeScreenshot: 14-relogin-sentinel-stands
 # ---------- sign out again ------------------------------------------
 - tapOn:
-    id: "sidebarToggle"
+    text: "Hide or show the side menu"
 - tapOn:
     text: "Preferences"
     waitUntilVisible: true
@@ -485,7 +498,7 @@ appId: com.ilseplacencia.mealprep
           waitUntilVisible: true
 - takeScreenshot: 16-second-account-in
 - tapOn:
-    id: "sidebarToggle"
+    text: "Hide or show the side menu"
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
@@ -502,7 +515,7 @@ appId: com.ilseplacencia.mealprep
     text: "Sim drive meal one"
 - takeScreenshot: 17-isolation-recipes
 - tapOn:
-    id: "sidebarToggle"
+    text: "Hide or show the side menu"
 - tapOn:
     text: "Calendar"
     waitUntilVisible: true
