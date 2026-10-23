@@ -1,4 +1,19 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v7 (2026-10-23) — v6 FAILED-INSTRUMENT at drive 6 (run
+# 39952174450, step-014): the bullets proof did its exact job —
+# it failed in 15 s on an EMPTY field and framed the truth. The
+# type had raced a third time, and drive 5's own hierarchy names
+# the disease: "Your password" matches THREE nodes on step 2 —
+# the label row [16,492][386,513], the label text
+# [16,492][111,513], and only then the INPUT [16,512][386,560].
+# A text tap takes the first match: three drives typed into a
+# label. TWIN-LABEL MISS, the ghost twin's sibling. v7 cures:
+# the password field is tapped by POINT at the input's own
+# centre (50%, 61%), read off its bounds, clear of the toggle
+# (x 335-378), on all three legs + their recoveries, with a
+# settle beat after the advance; the bullets proof stays as
+# the judge — a missed tap now fails fast and framed instead
+# of dying at the door wait. v6: 16,359 B.
 # Version: v6 (2026-10-23) — v5 FAILED-INSTRUMENT at drive 5 (run
 # 39950034970, step-022, the post-Continue door-gone wait): the
 # focus race beat the hardening a second time — the recovery RAN
@@ -101,10 +116,9 @@ appId: com.ilseplacencia.mealprep
 - takeScreenshot: 02-email-step
 - tapOn:
     point: "50%, 73%"
+- waitForAnimationToEnd
 - tapOn:
-    text: "Your password"
-    waitUntilVisible: true
-    retryTapIfNoChange: true
+    point: "50%, 61%"
 - waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD}"
 # LANDING PROOF (drive 5): a filled secure field exposes its
@@ -126,9 +140,7 @@ appId: com.ilseplacencia.mealprep
       visible: "Type your password first, then continue."
     commands:
       - tapOn:
-          text: "Your password"
-          waitUntilVisible: true
-          retryTapIfNoChange: true
+          point: "50%, 61%"
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD}"
       - extendedWaitUntil:
@@ -259,10 +271,9 @@ appId: com.ilseplacencia.mealprep
     point: "90%, 62%"
 - tapOn:
     point: "50%, 73%"
+- waitForAnimationToEnd
 - tapOn:
-    text: "Your password"
-    waitUntilVisible: true
-    retryTapIfNoChange: true
+    point: "50%, 61%"
 - waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD}"
 # LANDING PROOF (drive 5): a filled secure field exposes its
@@ -283,9 +294,7 @@ appId: com.ilseplacencia.mealprep
       visible: "Type your password first, then continue."
     commands:
       - tapOn:
-          text: "Your password"
-          waitUntilVisible: true
-          retryTapIfNoChange: true
+          point: "50%, 61%"
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD}"
       - extendedWaitUntil:
@@ -373,10 +382,9 @@ appId: com.ilseplacencia.mealprep
     point: "90%, 62%"
 - tapOn:
     point: "50%, 73%"
+- waitForAnimationToEnd
 - tapOn:
-    text: "Your password"
-    waitUntilVisible: true
-    retryTapIfNoChange: true
+    point: "50%, 61%"
 - waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD2}"
 - extendedWaitUntil:
@@ -394,9 +402,7 @@ appId: com.ilseplacencia.mealprep
       visible: "Type your password first, then continue."
     commands:
       - tapOn:
-          text: "Your password"
-          waitUntilVisible: true
-          retryTapIfNoChange: true
+          point: "50%, 61%"
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD2}"
       - extendedWaitUntil:
