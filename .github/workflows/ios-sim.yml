@@ -1,0 +1,101 @@
+name: iOS Simulator Copy (Meal Prep)
+
+# Manual run only. Builds an UNSIGNED simulator copy of the SAME tree the
+# device workflow ships (candidate 24's source: store-build/ assembled from
+# the repo-root certified files, service worker "mealprep-v61"), boots a
+# simulator on the runner, installs + cold-launches the copy, and captures a
+# first-open screenshot. Test lane only: proves nothing about the real phone
+# door; the device build + ios-ipa.yml are untouched by this file.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sim:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: store-build
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: store-build/package-lock.json
+
+      - name: Assemble certified www tree from repo root
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          FILES="account-sync.js accounts-config.js accounts.js app.js auth.js calendar-import.js data.js demo-seed.js icon-192.png icon-512.png icon-maskable-512.png icon.svg index.html lang.js logic.js logo.svg manifest.webmanifest mina-celebrate.svg mina-point-show.svg mina-wave-goodbye.svg mina-welcome.svg nutrition.js service-worker.js styles.css vendor/coco-ssd.min.js vendor/fonts/Fraunces.ttf vendor/fonts/NunitoSans.ttf vendor/fonts/OFL-Fraunces.txt vendor/fonts/OFL-NunitoSans.txt vendor/ical/LICENSE.txt vendor/ical/ical.min.js vendor/model/group1-shard1of5 vendor/model/group1-shard2of5 vendor/model/group1-shard3of5 vendor/model/group1-shard4of5 vendor/model/group1-shard5of5 vendor/model/model.json vendor/tf.min.js"
+          for f in $FILES; do
+            mkdir -p "store-build/www/$(dirname "$f")"
+            cp "$f" "store-build/www/$f"
+          done
+          grep -q 'mealprep-v61' store-build/www/service-worker.js
+          echo "www tree assembled: $(find store-build/www -type f | wc -l) files"
+
+      - name: Install dependencies and sync iOS
+        run: |
+          npm ci
+          npx cap sync ios
+
+      - name: Build the simulator copy (no signing)
+        run: |
+          xcodebuild build \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/sim-build" \
+            CODE_SIGNING_ALLOWED=NO
+          find "$RUNNER_TEMP/sim-build/Build/Products" -maxdepth 2 -name "*.app" -print
+
+      - name: Boot a simulator, install, cold-launch, screenshot
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find "$RUNNER_TEMP/sim-build/Build/Products" -maxdepth 2 -name "App.app" | head -1)
+          echo "App: $APP_PATH"
+          UDID=$(python3 - <<'PY'
+          import json, subprocess
+          data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "-j", "devices", "available"]))
+          best = None
+          for runtime, devs in data["devices"].items():
+              if "iOS" not in runtime:
+                  continue
+              for d in devs:
+                  if d["name"].startswith("iPhone") and d.get("isAvailable", True):
+                      ver = runtime.rsplit("-", 1)[-1]
+                      if best is None or ver > best[0]:
+                          best = (ver, d["udid"], d["name"])
+          print(best[1])
+          PY
+          )
+          echo "Simulator: $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install booted "$APP_PATH"
+          xcrun simctl launch booted com.ilseplacencia.mealprep
+          sleep 8
+          xcrun simctl io booted screenshot "$RUNNER_TEMP/mealprep-first-open.png"
+          ls -la "$RUNNER_TEMP/mealprep-first-open.png"
+          cd "$RUNNER_TEMP/sim-build/Build/Products/Release-iphonesimulator"
+          ditto -c -k --sequesterRsrc --keepParent App.app "$RUNNER_TEMP/mealprep-sim-app.zip"
+          ls -la "$RUNNER_TEMP/mealprep-sim-app.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mealprep-sim-copy
+          path: |
+            ${{ runner.temp }}/mealprep-sim-app.zip
+            ${{ runner.temp }}/mealprep-first-open.png
+          if-no-files-found: error
+          retention-days: 30
