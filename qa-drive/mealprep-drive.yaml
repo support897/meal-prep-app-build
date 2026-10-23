@@ -1,4 +1,19 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v13 (2026-10-24) — v12's STAGGER CURE LANDED on
+# drive 12 (run 39968772962): a handler poll FIRED (the
+# step-026 runFlow frame stands) and the card was met at the
+# ENTRY site — but the handler died at its "Save" tap
+# (step-030): THE RE-OFFER CARD IS THE TOUR CARD, and its
+# tree (read from the step-030 hierarchy itself) carries NO
+# "Save" — its buttons are "Skip tour" and "Next" [284,594]
+# [360,638], the field's input [42,514][360,562], and the
+# keyboard toolbar's own node "Done" [341,486][381,524].
+# The handler's save shape was an assumption, never sourced.
+# v13 corrects all four handler bodies: the dismissal is the
+# toolbar's "Done" NODE tap, and the advance is "Next"; the
+# notVisible heading judge then proves the card left. (The
+# name's landing shows next drive: a saved name ends the
+# re-offer for good.)
 # Version: v12 (2026-10-24) — drive 11 (run 39965684190)
 # travelled two steps past drive 10 and died at the same
 # assert (step-039): the card stood over the filled month
@@ -271,9 +286,10 @@ appId: com.ilseplacencia.mealprep
       - waitForAnimationToEnd
       - inputText: "Sim Driver MP"
       - tapOn:
-          point: "90%, 62%"
+          text: "Done"
+          waitUntilVisible: true
       - tapOn:
-          text: "Save"
+          text: "Next"
           waitUntilVisible: true
       - extendedWaitUntil:
           notVisible:
@@ -291,9 +307,10 @@ appId: com.ilseplacencia.mealprep
       - waitForAnimationToEnd
       - inputText: "Sim Driver MP"
       - tapOn:
-          point: "90%, 62%"
+          text: "Done"
+          waitUntilVisible: true
       - tapOn:
-          text: "Save"
+          text: "Next"
           waitUntilVisible: true
       - extendedWaitUntil:
           notVisible:
@@ -331,9 +348,10 @@ appId: com.ilseplacencia.mealprep
       - waitForAnimationToEnd
       - inputText: "Sim Driver MP"
       - tapOn:
-          point: "90%, 62%"
+          text: "Done"
+          waitUntilVisible: true
       - tapOn:
-          text: "Save"
+          text: "Next"
           waitUntilVisible: true
       - extendedWaitUntil:
           notVisible:
@@ -351,9 +369,10 @@ appId: com.ilseplacencia.mealprep
       - waitForAnimationToEnd
       - inputText: "Sim Driver MP"
       - tapOn:
-          point: "90%, 62%"
+          text: "Done"
+          waitUntilVisible: true
       - tapOn:
-          text: "Save"
+          text: "Next"
           waitUntilVisible: true
       - extendedWaitUntil:
           notVisible:
