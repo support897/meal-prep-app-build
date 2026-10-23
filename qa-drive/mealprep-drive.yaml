@@ -503,6 +503,31 @@ appId: com.ilseplacencia.mealprep
           text: "Recipes"
           waitUntilVisible: true
       - waitForAnimationToEnd
+# DRIVE 24 (run 40012083155): the first entry's retry fired and
+# its inner tap failed SILENTLY (a failed subcommand inside a
+# runFlow does not stop the flow — this drive is the proof), and
+# the form leg then ran against a calendar that never left: the
+# death came at a form "Done" tap with a calendar-only tree.
+# A second staggered retry now stands at both entries, and the
+# first entry judges the destination heading FATALLY before
+# the page-top swipes — a navigation that never landed dies at
+# the navigation, not mid-form.
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible: "Your recipes"
+    commands:
+      - tapOn:
+          text: "Hide or show the side menu"
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "Recipes"
+          waitUntilVisible: true
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      text: "Your recipes"
+    timeout: 60000
 # PAGE-TOP REFRESH (drive 15, run 39980492964): the Recipes page
 # stood scrolled a shade too deep at entry — the section's own
 # h2 "Add your recipe" sat just above the rendered band while its
@@ -749,6 +774,27 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible: "Your recipes"
+    commands:
+      - tapOn:
+          text: "Hide or show the side menu"
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "Recipes"
+          waitUntilVisible: true
+      - waitForAnimationToEnd
+# DRIVE 24 (run 40012083155): the first entry's retry fired and
+# its inner tap failed SILENTLY (a failed subcommand inside a
+# runFlow does not stop the flow — this drive is the proof), and
+# the form leg then ran against a calendar that never left: the
+# death came at a form "Done" tap with a calendar-only tree.
+# A second staggered retry now stands at both entries, and the
+# first entry judges the destination heading FATALLY before
+# the page-top swipes — a navigation that never landed dies at
+# the navigation, not mid-form.
 - waitForAnimationToEnd
 - runFlow:
     when:
