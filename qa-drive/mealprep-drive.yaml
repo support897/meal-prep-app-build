@@ -1,0 +1,336 @@
+# Meal Prep 24 simulator drive — QA Tester chair.
+# The FINISHING ORDER spine for candidate 24's simulator copy
+# (bundle com.ilseplacencia.mealprep, build 24, SW mealprep-v61; the
+# copy's byte-leg pins stand in store-uploads/scratch/mealprep-sim/
+# PINS.md). Spine: sign up -> the real journey (month fill + an own
+# recipe under the sentinel name) -> sign out -> sign in -> the data
+# stands -> a SECOND account whose space holds none of it.
+# Structural template: pace-drive.yaml v2 — every tap waits until its
+# target is visible; sheets are waited for, dismissed non-optionally,
+# and proven gone before anything behind them is touched.
+# TEST_EMAIL / TEST_PASSWORD / TEST_EMAIL2 / TEST_PASSWORD2 arrive as
+# workflow env at dispatch (passwords from QA's mode-600 cast, sealed
+# the Pace way); the values never appear in this file or the repo.
+# NOTE: Maestro's commands.json records env values in plaintext — the
+# workflow's collect step must NOT upload commands.json (the Pace v1
+# lesson; see pace-drive.yaml + ios-sim-drive.yml).
+# Selector provenance for every string below: mealprep-drive-NOTES.md.
+appId: com.ilseplacencia.mealprep
+---
+# ---------- cold open: the first-open guide stands over the door ----
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Skip tour"
+    timeout: 90000
+- takeScreenshot: 00-launched-guide
+- tapOn:
+    text: "Skip tour"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    notVisible:
+      text: "Skip tour"
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      text: "Sign in or make your account"
+    timeout: 60000
+- takeScreenshot: 01-door
+# ---------- stage (i): sign up, account 1 (the door's one button ----
+# ---------- does both: email step, then password step) ---------------
+- tapOn:
+    text: "you@example.com"
+    waitUntilVisible: true
+- inputText: "${TEST_EMAIL}"
+- hideKeyboard
+- takeScreenshot: 02-email-step
+- tapOn:
+    text: "→"
+    waitUntilVisible: true
+- tapOn:
+    text: "Your password"
+    waitUntilVisible: true
+- inputText: "${TEST_PASSWORD}"
+- hideKeyboard
+- takeScreenshot: 03-password-step
+- tapOn:
+    text: "Continue"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    notVisible:
+      text: "Sign in or make your account"
+    timeout: 90000
+- takeScreenshot: 04-inside
+# ---------- first-entry surfaces: the tour, then the name ask -------
+# A fresh account's tour stands after entry (the b23 spine + the b24
+# lib's post-entry dismissal both ride on it): waited for, skipped,
+# proven gone.
+- extendedWaitUntil:
+    visible:
+      text: "Skip tour"
+    timeout: 60000
+- tapOn:
+    text: "Skip tour"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    notVisible:
+      text: "Skip tour"
+    timeout: 30000
+# The name ask is a quiet re-offer, not a certainty: handled only if
+# it stands.
+- runFlow:
+    when:
+      visible: "Your name"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+      - inputText: "Sim Driver"
+      - hideKeyboard
+      - tapOn:
+          text: "Save"
+          waitUntilVisible: true
+- takeScreenshot: 05-entry-clear
+# ---------- stage (ii)a: the plan — fill the first month ------------
+# The sidebar starts hidden; its toggle is icon-only (no visible
+# text exists — the flow addresses it by its DOM id; see NOTES).
+- tapOn:
+    id: "sidebarToggle"
+- tapOn:
+    text: "Calendar"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "No meals planned yet."
+    timeout: 60000
+- takeScreenshot: 06-calendar-empty
+- tapOn:
+    text: "Plan my first month"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    notVisible:
+      text: "No meals planned yet."
+    timeout: 60000
+- takeScreenshot: 07-month-filled
+# ---------- stage (ii)b: an own recipe under the sentinel name ------
+- tapOn:
+    id: "sidebarToggle"
+- tapOn:
+    text: "Recipes"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "Add your recipe"
+    timeout: 60000
+- tapOn:
+    text: "Grandma soup"
+    waitUntilVisible: true
+- inputText: "Sim drive meal one"
+- tapOn:
+    text: "200 g chicken breast"
+    waitUntilVisible: true
+- inputText: "200 g chicken breast"
+- tapOn:
+    text: "Cook the chicken until golden"
+    waitUntilVisible: true
+- inputText: "Cook the chicken until golden"
+- hideKeyboard
+- takeScreenshot: 08-recipe-form
+- tapOn:
+    text: "Save my recipe"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "Sim drive meal one"
+    timeout: 60000
+- takeScreenshot: 09-sentinel-saved
+# ---------- stage (iii): sign out through the app's own control -----
+# The account card lives in Preferences; the b24 bar measured its
+# render at ~25-30 s after entry on the interior, so the wait is 90 s.
+- tapOn:
+    id: "sidebarToggle"
+- tapOn:
+    text: "Preferences"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "Sign out"
+    timeout: 90000
+- takeScreenshot: 10-prefs-account
+- tapOn:
+    text: "Sign out"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "Sign in or make your account"
+    timeout: 60000
+- takeScreenshot: 11-signed-out
+# ---------- stage (iv): sign in again — the data stands -------------
+- tapOn:
+    text: "you@example.com"
+    waitUntilVisible: true
+- inputText: "${TEST_EMAIL}"
+- hideKeyboard
+- tapOn:
+    text: "→"
+    waitUntilVisible: true
+- tapOn:
+    text: "Your password"
+    waitUntilVisible: true
+- inputText: "${TEST_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    text: "Continue"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    notVisible:
+      text: "Sign in or make your account"
+    timeout: 90000
+# The tour state is saved with the account, so no tour is expected;
+# both first-entry surfaces are still handled if either stands.
+- runFlow:
+    when:
+      visible: "Skip tour"
+    commands:
+      - tapOn:
+          text: "Skip tour"
+          waitUntilVisible: true
+- runFlow:
+    when:
+      visible: "Your name"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+      - inputText: "Sim Driver"
+      - hideKeyboard
+      - tapOn:
+          text: "Save"
+          waitUntilVisible: true
+- takeScreenshot: 12-relogin-inside
+- tapOn:
+    id: "sidebarToggle"
+- tapOn:
+    text: "Calendar"
+    waitUntilVisible: true
+# The plan stands: the empty state and its fill button never render.
+# (The b24 bar's adoption reads landed at ~10-15 s; the wait is 60 s.)
+- extendedWaitUntil:
+    notVisible:
+      text: "Plan my first month"
+    timeout: 60000
+- assertNotVisible:
+    text: "No meals planned yet."
+- takeScreenshot: 13-relogin-plan-stands
+- tapOn:
+    id: "sidebarToggle"
+- tapOn:
+    text: "Recipes"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "Sim drive meal one"
+    timeout: 60000
+- takeScreenshot: 14-relogin-sentinel-stands
+# ---------- sign out again ------------------------------------------
+- tapOn:
+    id: "sidebarToggle"
+- tapOn:
+    text: "Preferences"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "Sign out"
+    timeout: 90000
+- tapOn:
+    text: "Sign out"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "Sign in or make your account"
+    timeout: 60000
+- takeScreenshot: 15-signed-out-again
+# ---------- stage (v): the second account — isolation ---------------
+- tapOn:
+    text: "you@example.com"
+    waitUntilVisible: true
+- inputText: "${TEST_EMAIL2}"
+- hideKeyboard
+- tapOn:
+    text: "→"
+    waitUntilVisible: true
+- tapOn:
+    text: "Your password"
+    waitUntilVisible: true
+- inputText: "${TEST_PASSWORD2}"
+- hideKeyboard
+- tapOn:
+    text: "Continue"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    notVisible:
+      text: "Sign in or make your account"
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      text: "Skip tour"
+    timeout: 60000
+- tapOn:
+    text: "Skip tour"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    notVisible:
+      text: "Skip tour"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Your name"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+      - inputText: "Sim Driver"
+      - hideKeyboard
+      - tapOn:
+          text: "Save"
+          waitUntilVisible: true
+- takeScreenshot: 16-second-account-in
+- tapOn:
+    id: "sidebarToggle"
+- tapOn:
+    text: "Recipes"
+    waitUntilVisible: true
+- extendedWaitUntil:
+    visible:
+      text: "Add your recipe"
+    timeout: 60000
+# Isolation: the first account's sentinel is ABSENT from this space.
+- extendedWaitUntil:
+    notVisible:
+      text: "Sim drive meal one"
+    timeout: 60000
+- assertNotVisible:
+    text: "Sim drive meal one"
+- takeScreenshot: 17-isolation-recipes
+- tapOn:
+    id: "sidebarToggle"
+- tapOn:
+    text: "Calendar"
+    waitUntilVisible: true
+# Cross-check: this account's plan is its own — empty, fill offered.
+- extendedWaitUntil:
+    visible:
+      text: "Plan my first month"
+    timeout: 60000
+- assertVisible:
+    text: "No meals planned yet."
+- takeScreenshot: 18-isolation-calendar
+# ---------- stage (vi): the delete leg is NOT in this flow ----------
+# Per the registered spine shape, deletion runs from QA's chair
+# against the real backend, not in Maestro: each account is deleted
+# through the app's own delete flow (Preferences account card) from
+# QA's harness, and the close is the owner-side full-footprint read
+# at 404 — users doc + subcollections + _entitlements/{uid} included,
+# per the fleet delete-verification law — reported beside this
+# drive's SIMULATOR results, never inside them.
