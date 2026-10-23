@@ -1,4 +1,14 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v11 (2026-10-23) — v10's SIDEBAR CURE LANDED on
+# drive 10 (run 39962288200): the sign-in, the calendar, and
+# the whole month fill all stood (the filled month in frame
+# 07). Death at step-037, the recipe wait: Mina's NAME
+# RE-OFFER card stood over the filled calendar — the standing
+# door law re-offering a skipped name once on the next visit,
+# the app behaving exactly as designed, and the flow had no
+# leg for it on a returning entry. v11 handles the card
+# wherever it stands (after entry, and again after the fill):
+# the sentinel name "Sim Driver MP" typed and saved.
 # Version: v10 (2026-10-23) — v9 TRAVELLED THE WHOLE DOOR on
 # drive 9 (run 39959325500): the email proved, the password
 # landed by its own outcome, the submit fired, the account
@@ -235,6 +245,29 @@ appId: com.ilseplacencia.mealprep
           text: "Save"
           waitUntilVisible: true
 - takeScreenshot: 05-entry-clear
+# THE NAME RE-OFFER (drive 10, run 39962288200): an account that
+# skipped its name meets Mina's card again on the next visit —
+# the standing door law, the app behaving exactly as designed.
+# Wherever it stands, the sentinel name is typed and saved.
+- runFlow:
+    when:
+      visible: "Hi! I'm Mina. Welcome in! What should we call you?"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "Sim Driver MP"
+      - tapOn:
+          point: "90%, 62%"
+      - tapOn:
+          text: "Save"
+          waitUntilVisible: true
+      - extendedWaitUntil:
+          notVisible:
+            text: "Hi! I'm Mina. Welcome in! What should we call you?"
+          timeout: 30000
 # ---------- stage (ii)a: the plan — fill the first month ------------
 # The sidebar starts hidden; its toggle is icon-only (no visible
 # text exists — the flow addresses it by its DOM id; see NOTES).
@@ -256,6 +289,25 @@ appId: com.ilseplacencia.mealprep
       text: "No meals planned yet."
     timeout: 60000
 - takeScreenshot: 07-month-filled
+- runFlow:
+    when:
+      visible: "Hi! I'm Mina. Welcome in! What should we call you?"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "Sim Driver MP"
+      - tapOn:
+          point: "90%, 62%"
+      - tapOn:
+          text: "Save"
+          waitUntilVisible: true
+      - extendedWaitUntil:
+          notVisible:
+            text: "Hi! I'm Mina. Welcome in! What should we call you?"
+          timeout: 30000
 # ---------- stage (ii)b: an own recipe under the sentinel name ------
 - tapOn:
     text: "Hide or show the side menu"
