@@ -373,18 +373,46 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Calendar"
     waitUntilVisible: true
+# DRIVE 23 (run 40008932692) died at the empty judge below,
+# step-037: drive 22's fill had PERSISTED — the entry calendar
+# stood full (the failure frame is the filled grid), and the
+# flow's fresh-state judge hunted an empty line that could
+# never appear. The fill is now a BRANCH, not a spine step:
+# the page-standing proof first ("Bring my calendar in" rides
+# the calendar's top in both states), then the fill block
+# runs only while the empty line stands — polled twice,
+# staggered, for a slow first paint; after a fill the line is
+# gone and the second poll stands down. When the month already
+# stands, 07 is taken as the filled entry itself.
 - extendedWaitUntil:
     visible:
-      text: "No meals planned yet."
+      text: "Bring my calendar in"
     timeout: 60000
-- takeScreenshot: 06-calendar-empty
-- tapOn:
-    text: "Plan my first month"
-    waitUntilVisible: true
-- extendedWaitUntil:
-    notVisible:
-      text: "No meals planned yet."
-    timeout: 60000
+- runFlow:
+    when:
+      visible: "No meals planned yet."
+    commands:
+      - takeScreenshot: 06-calendar-empty
+      - tapOn:
+          text: "Plan my first month"
+          waitUntilVisible: true
+      - extendedWaitUntil:
+          notVisible:
+            text: "No meals planned yet."
+          timeout: 60000
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "No meals planned yet."
+    commands:
+      - takeScreenshot: 06-calendar-empty
+      - tapOn:
+          text: "Plan my first month"
+          waitUntilVisible: true
+      - extendedWaitUntil:
+          notVisible:
+            text: "No meals planned yet."
+          timeout: 60000
 - takeScreenshot: 07-month-filled
 - runFlow:
     when:
