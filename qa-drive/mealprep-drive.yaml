@@ -1,4 +1,23 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v8 (2026-10-23) — v7 FAILED-INSTRUMENT at drive 7 (run
+# 39953457133, step-015): not the password leg this time — the
+# EMAIL type raced on a slow cold door (02 stands with the
+# field EMPTY, cursor at its start). Every later step then ran
+# faithfully on the wrong state: the advance point (50%, 73%),
+# measured for the settled keyboard-down layout, landed on the
+# standing keyboard; the field point landed on the accessory
+# bar; and the password typed into the still-focused email
+# field — the failure frame shows it there in clear text. The
+# bullets proof again failed fast and honest. Two structural
+# gaps, both cured: the email leg had NO landing proof (the
+# typed-address proof NeedsMe's flow has carried since its v3),
+# and nothing proved step 2 stood before the field tap. v8:
+# email legs gain retry + settle + the typed-address proof;
+# a "Your password" visible proof stands between the advance
+# and the field tap on all three legs, so a missed advance
+# dies framed on step 1 instead of typing into it. v7's
+# point-tap field cure stands (unjudged — the drive never
+# reached it). v7: 16,948 B.
 # Version: v7 (2026-10-23) — v6 FAILED-INSTRUMENT at drive 6 (run
 # 39952174450, step-014): the bullets proof did its exact job —
 # it failed in 15 s on an EMPTY field and framed the truth. The
@@ -110,13 +129,23 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "you@example.com"
     waitUntilVisible: true
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
 - inputText: "${TEST_EMAIL}"
+- extendedWaitUntil:
+    visible:
+      text: "${TEST_EMAIL}"
+    timeout: 15000
 - tapOn:
     point: "90%, 62%"
 - takeScreenshot: 02-email-step
 - tapOn:
     point: "50%, 73%"
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      text: "Your password"
+    timeout: 30000
 - tapOn:
     point: "50%, 61%"
 - waitForAnimationToEnd
@@ -266,12 +295,22 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "you@example.com"
     waitUntilVisible: true
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
 - inputText: "${TEST_EMAIL}"
+- extendedWaitUntil:
+    visible:
+      text: "${TEST_EMAIL}"
+    timeout: 15000
 - tapOn:
     point: "90%, 62%"
 - tapOn:
     point: "50%, 73%"
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      text: "Your password"
+    timeout: 30000
 - tapOn:
     point: "50%, 61%"
 - waitForAnimationToEnd
@@ -377,12 +416,22 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "you@example.com"
     waitUntilVisible: true
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
 - inputText: "${TEST_EMAIL2}"
+- extendedWaitUntil:
+    visible:
+      text: "${TEST_EMAIL2}"
+    timeout: 15000
 - tapOn:
     point: "90%, 62%"
 - tapOn:
     point: "50%, 73%"
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      text: "Your password"
+    timeout: 30000
 - tapOn:
     point: "50%, 61%"
 - waitForAnimationToEnd
