@@ -1,4 +1,7 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v30 (2026-10-24) — the first "Recipes" attempt at
+# BOTH entries moves inside a visible-keyed runFlow (drive
+# 29: the fatal tapOn died on an eaten toggle).
 # Version: v29 (2026-10-24) — the relogin plan judge gains a
 # re-entry cycle + a 180 s window (drive 28's slow-pull death).
 # Version: v28 (2026-10-24) — v12's STAGGER CURE LANDED on
@@ -487,12 +490,26 @@ appId: com.ilseplacencia.mealprep
 # v22 cure (settles + the destination-keyed retry) now stands
 # at BOTH Recipes entries off the calendar; the DOWN swipes
 # below then top whichever page stands, harmless on both.
+# DRIVE 29 (run 40032410973) died at this entry's first
+# "Recipes" tapOn itself, step-051: the toggle tap was eaten
+# by the just-filled grid's repaint (the death tree holds no
+# sidebar items at all), so the item never stood and the
+# FATAL tapOn died before the retries behind it could run.
+# Cure (v30, BOTH entries): the first attempt moves inside a
+# runFlow keyed on the item standing — a swallowed miss falls
+# through to the destination-keyed retries, and the fatal
+# "My own recipe" judge behind them decides.
 - tapOn:
     text: "Hide or show the side menu"
 - waitForAnimationToEnd
-- tapOn:
-    text: "Recipes"
-    waitUntilVisible: true
+- runFlow:
+    when:
+      visible: "Recipes"
+    commands:
+      - tapOn:
+          text: "Recipes"
+          waitUntilVisible: true
+      - waitForAnimationToEnd
 - waitForAnimationToEnd
 - runFlow:
     when:
@@ -825,12 +842,19 @@ appId: com.ilseplacencia.mealprep
 # retry keyed on the destination heading's ABSENCE (the Fit
 # runFlow notVisible shape) — it fires only while "Your
 # recipes" does not stand, and re-runs the same navigation.
+# v30: the first attempt is de-fatalised exactly as at the
+# first entry (drive 29's cure — see stage (ii)b).
 - tapOn:
     text: "Hide or show the side menu"
 - waitForAnimationToEnd
-- tapOn:
-    text: "Recipes"
-    waitUntilVisible: true
+- runFlow:
+    when:
+      visible: "Recipes"
+    commands:
+      - tapOn:
+          text: "Recipes"
+          waitUntilVisible: true
+      - waitForAnimationToEnd
 - waitForAnimationToEnd
 - runFlow:
     when:
