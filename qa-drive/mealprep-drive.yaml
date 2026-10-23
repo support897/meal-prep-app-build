@@ -288,9 +288,20 @@ appId: com.ilseplacencia.mealprep
       - tapOn:
           text: "Done"
           waitUntilVisible: true
-      - tapOn:
-          text: "Next"
-          waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Save"
+          commands:
+            - tapOn:
+                text: "Save"
+                waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Next"
+          commands:
+            - tapOn:
+                text: "Next"
+                waitUntilVisible: true
       - extendedWaitUntil:
           notVisible:
             text: "Hi! I'm Mina. Welcome in! What should we call you?"
@@ -309,9 +320,20 @@ appId: com.ilseplacencia.mealprep
       - tapOn:
           text: "Done"
           waitUntilVisible: true
-      - tapOn:
-          text: "Next"
-          waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Save"
+          commands:
+            - tapOn:
+                text: "Save"
+                waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Next"
+          commands:
+            - tapOn:
+                text: "Next"
+                waitUntilVisible: true
       - extendedWaitUntil:
           notVisible:
             text: "Hi! I'm Mina. Welcome in! What should we call you?"
@@ -350,9 +372,20 @@ appId: com.ilseplacencia.mealprep
       - tapOn:
           text: "Done"
           waitUntilVisible: true
-      - tapOn:
-          text: "Next"
-          waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Save"
+          commands:
+            - tapOn:
+                text: "Save"
+                waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Next"
+          commands:
+            - tapOn:
+                text: "Next"
+                waitUntilVisible: true
       - extendedWaitUntil:
           notVisible:
             text: "Hi! I'm Mina. Welcome in! What should we call you?"
@@ -371,9 +404,20 @@ appId: com.ilseplacencia.mealprep
       - tapOn:
           text: "Done"
           waitUntilVisible: true
-      - tapOn:
-          text: "Next"
-          waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Save"
+          commands:
+            - tapOn:
+                text: "Save"
+                waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Next"
+          commands:
+            - tapOn:
+                text: "Next"
+                waitUntilVisible: true
       - extendedWaitUntil:
           notVisible:
             text: "Hi! I'm Mina. Welcome in! What should we call you?"
@@ -406,6 +450,37 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Save my recipe"
     waitUntilVisible: true
+- runFlow:
+    when:
+      visible: "Hi! I'm Mina. Welcome in! What should we call you?"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "Sim Driver MP"
+      - tapOn:
+          text: "Done"
+          waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Save"
+          commands:
+            - tapOn:
+                text: "Save"
+                waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Next"
+          commands:
+            - tapOn:
+                text: "Next"
+                waitUntilVisible: true
+      - extendedWaitUntil:
+          notVisible:
+            text: "Hi! I'm Mina. Welcome in! What should we call you?"
+          timeout: 30000
 - extendedWaitUntil:
     visible:
       text: "Sim drive meal one"
@@ -621,6 +696,37 @@ appId: com.ilseplacencia.mealprep
 - takeScreenshot: 16-second-account-in
 - tapOn:
     text: "Hide or show the side menu"
+- runFlow:
+    when:
+      visible: "Hi! I'm Mina. Welcome in! What should we call you?"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "Sim Driver MP"
+      - tapOn:
+          text: "Done"
+          waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Save"
+          commands:
+            - tapOn:
+                text: "Save"
+                waitUntilVisible: true
+      - runFlow:
+          when:
+            visible: "Next"
+          commands:
+            - tapOn:
+                text: "Next"
+                waitUntilVisible: true
+      - extendedWaitUntil:
+          notVisible:
+            text: "Hi! I'm Mina. Welcome in! What should we call you?"
+          timeout: 30000
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
