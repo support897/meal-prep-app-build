@@ -180,10 +180,21 @@ appId: com.ilseplacencia.mealprep
 # tour is handled post-entry, keyed to the name ask, in stage (i).
 - launchApp:
     clearState: true
+# Drive 14 (run 39976569413) died at this judge on a BLANK white
+# app: the tree held only the app title and scroll bars for the
+# whole window — a cold-boot paint that never landed (the tree-lag
+# class, pixels edition; drives 9-13 painted the same door fine).
+# Cure, the fleet shape (Pace v15 / Ruefly v7): a gesture refresh
+# after launch wakes the compositor before the judge runs, and
+# the judge gets 90 s.
+- waitForAnimationToEnd
+- swipe:
+    direction: UP
+- waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       text: "Sign in or make your account"
-    timeout: 60000
+    timeout: 90000
 - takeScreenshot: 00-door
 # ---------- stage (i): sign up, account 1 (the door's one button ----
 # ---------- does both: email step, then password step) ---------------
