@@ -1,4 +1,16 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v9 (2026-10-23) — v8's cures HELD WHOLE on drive 8
+# (run 39956274624): the email landed and stood proven, the
+# password typed and FILLED (the failure frame shows 20 bullets
+# standing, Continue clear). The drive died at step-018 on the
+# bullets PROOF itself: this door's tree carries the filled
+# field as ONE node of twenty "•" characters (read from the
+# failure hierarchy: text of twenty U+2022), and a one-character
+# wait can never equal it — the FULL-NODE law at its limit. The
+# proof is retired on this door (all six sites): the fill is
+# proven by the Continue outcome instead — inside standing, or
+# the app's honest "Type your password first" line framed in
+# the failure photo. No account was created (no submit fired).
 # Version: v8 (2026-10-23) — v7 FAILED-INSTRUMENT at drive 7 (run
 # 39953457133, step-015): not the password leg this time — the
 # EMAIL type raced on a slow cold door (02 stands with the
@@ -153,10 +165,7 @@ appId: com.ilseplacencia.mealprep
 # LANDING PROOF (drive 5): a filled secure field exposes its
 # bullets in the tree (proven on NeedsMe drive 3's hierarchy,
 # 20 bullets standing) — wait for them before Continue is tapped.
-- extendedWaitUntil:
-    visible:
-      text: "•"
-    timeout: 15000
+- waitForAnimationToEnd
 - takeScreenshot: 03-password-step
 - tapOn:
     text: "Continue"
@@ -172,10 +181,7 @@ appId: com.ilseplacencia.mealprep
           point: "50%, 61%"
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD}"
-      - extendedWaitUntil:
-          visible:
-            text: "•"
-          timeout: 15000
+      - waitForAnimationToEnd
       - tapOn:
           text: "Continue"
           waitUntilVisible: true
@@ -318,10 +324,7 @@ appId: com.ilseplacencia.mealprep
 # LANDING PROOF (drive 5): a filled secure field exposes its
 # bullets in the tree (proven on NeedsMe drive 3's hierarchy,
 # 20 bullets standing) — wait for them before Continue is tapped.
-- extendedWaitUntil:
-    visible:
-      text: "•"
-    timeout: 15000
+- waitForAnimationToEnd
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
@@ -336,10 +339,7 @@ appId: com.ilseplacencia.mealprep
           point: "50%, 61%"
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD}"
-      - extendedWaitUntil:
-          visible:
-            text: "•"
-          timeout: 15000
+      - waitForAnimationToEnd
       - tapOn:
           text: "Continue"
           waitUntilVisible: true
@@ -436,10 +436,7 @@ appId: com.ilseplacencia.mealprep
     point: "50%, 61%"
 - waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD2}"
-- extendedWaitUntil:
-    visible:
-      text: "•"
-    timeout: 15000
+- waitForAnimationToEnd
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
@@ -454,10 +451,7 @@ appId: com.ilseplacencia.mealprep
           point: "50%, 61%"
       - waitForAnimationToEnd
       - inputText: "${TEST_PASSWORD2}"
-      - extendedWaitUntil:
-          visible:
-            text: "•"
-          timeout: 15000
+      - waitForAnimationToEnd
       - tapOn:
           text: "Continue"
           waitUntilVisible: true
