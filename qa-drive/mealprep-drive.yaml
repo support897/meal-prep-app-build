@@ -470,20 +470,54 @@ appId: com.ilseplacencia.mealprep
     visible:
       text: "Add your recipe"
     timeout: 60000
+# DRIVE 17 (run 39987343711) died at the Save tap, step-060:
+# the field taps below targeted PLACEHOLDER texts whose nodes
+# stand in the tree BELOW THE FOLD; the taps never focused the
+# ingredients/steps fields, so both types appended into the
+# still-focused name field (the failure frame's name input
+# holds the concatenation), and "Save my recipe" — further
+# down the long form — never rendered at all (absent from the
+# failure hierarchy). PLACEHOLDER ≠ VALUE + BELOW-THE-FOLD,
+# flow faults both. v18: dismiss + scroll each field into the
+# visible band before its tap, and scroll the Save button into
+# the band before its tap. The dismissal is the toolbar's own
+# "Done" NODE (present in drive 17's hierarchy).
 - tapOn:
     text: "Grandma soup"
     waitUntilVisible: true
 - inputText: "Sim drive meal one"
 - tapOn:
+    text: "Done"
+    waitUntilVisible: true
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- waitForAnimationToEnd
+- tapOn:
     text: "200 g chicken breast"
     waitUntilVisible: true
 - inputText: "200 g chicken breast"
+- tapOn:
+    text: "Done"
+    waitUntilVisible: true
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- waitForAnimationToEnd
 - tapOn:
     text: "Cook the chicken until golden"
     waitUntilVisible: true
 - inputText: "Cook the chicken until golden"
 - tapOn:
-    point: "90%, 62%"
+    text: "Done"
+    waitUntilVisible: true
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- waitForAnimationToEnd
 - takeScreenshot: 08-recipe-form
 - tapOn:
     text: "Save my recipe"
