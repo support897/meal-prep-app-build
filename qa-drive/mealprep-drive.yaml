@@ -17,26 +17,23 @@
 # Selector provenance for every string below: mealprep-drive-NOTES.md.
 appId: com.ilseplacencia.mealprep
 ---
-# ---------- cold open: the first-open guide stands over the door ----
+# ---------- cold open: the door alone (v2 correction) ---------------
+# Drive 1 (run 39940195933) FAILED at this block, INSTRUMENT class: the
+# guide is a POST-ENTRY surface on Meal Prep (proven by three boots:
+# the copy workflow's first-open, this drive's frame 00, and QA's b24
+# harness drives, where the name ask stands only after sign-in). Its
+# "Skip tour" node pre-exists in the WebView tree, so the text wait
+# passed on a hidden node, the tap landed on the email field (keyboard
+# up in the failure frame), and the notVisible assert could never pass
+# while the node persists in the tree. Build 24 was not charged. The
+# tour is handled post-entry, keyed to the name ask, in stage (i).
 - launchApp:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Skip tour"
-    timeout: 90000
-- takeScreenshot: 00-launched-guide
-- tapOn:
-    text: "Skip tour"
-    waitUntilVisible: true
-- extendedWaitUntil:
-    notVisible:
-      text: "Skip tour"
-    timeout: 30000
-- extendedWaitUntil:
-    visible:
       text: "Sign in or make your account"
     timeout: 60000
-- takeScreenshot: 01-door
+- takeScreenshot: 00-door
 # ---------- stage (i): sign up, account 1 (the door's one button ----
 # ---------- does both: email step, then password step) ---------------
 - tapOn:
@@ -73,10 +70,11 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Skip tour"
     waitUntilVisible: true
-- extendedWaitUntil:
-    notVisible:
-      text: "Skip tour"
-    timeout: 30000
+# Gone-proof, v2: NOT the node's absence — drive 1 proved the node
+# persists in the tree after dismissal. The proof is progress: if the
+# tour still stood, the sidebar + Calendar taps in stage (ii)a would
+# hit its overlay and "No meals planned yet." could never appear;
+# that wait is this leg's gone-proof.
 # The name ask is a quiet re-offer, not a certainty: handled only if
 # it stands.
 - runFlow:
