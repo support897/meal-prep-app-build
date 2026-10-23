@@ -439,6 +439,17 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
+# PAGE-TOP REFRESH (drive 15, run 39980492964): the Recipes page
+# stood scrolled a shade too deep at entry — the section's own
+# h2 "Add your recipe" sat just above the rendered band while its
+# form filled the screen, and this judge hunted the whole window
+# for a node the tree never carried. Two DOWN swipes return the
+# page to its top before the judge (Pace v19's shape).
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       text: "Add your recipe"
@@ -741,6 +752,11 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Recipes"
     waitUntilVisible: true
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       text: "Add your recipe"
