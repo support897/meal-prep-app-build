@@ -1,4 +1,19 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v4 (2026-10-23) — v3 FAILED-INSTRUMENT at drive 3 (run
+# 39945885637, step-011): the renamed "Next" tap FOUND a node and
+# passed, yet the door never advanced — the step-011 hierarchy
+# holds TWO "Next" nodes: the real button at bounds
+# [169,603][233,668]pt and a GHOST at [149,-5][190,36]pt, clipped
+# off-screen at the top (the guide/template furniture this
+# WebView's tree pre-carries — the same family as drive 1's ghost).
+# The tap went to the ghost's coordinates, a tap into the status
+# bar. v4 cures: the three door advances tap by POINT "50%, 73%",
+# measured from the real button's own bounds in that hierarchy
+# (centre 201pt, 635pt on the 402x874pt tree) and corroborated by
+# the button's identical position in all three drives' frames.
+# The accessory-Done cure stands unjudged on this door (the
+# keyboard was down in the failure frame; the ghost fully explains
+# the death). v3: 11,124 B.
 # Version: v3 (2026-10-23) — v2 FAILED-INSTRUMENT at drive 2 (run
 # 39943226253, step-010): the door advance tapOn text "→" never
 # matched — the failure hierarchy holds the glyph ZERO times and
@@ -56,8 +71,7 @@ appId: com.ilseplacencia.mealprep
     point: "90%, 62%"
 - takeScreenshot: 02-email-step
 - tapOn:
-    text: "Next"
-    waitUntilVisible: true
+    point: "50%, 73%"
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
@@ -188,8 +202,7 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     point: "90%, 62%"
 - tapOn:
-    text: "Next"
-    waitUntilVisible: true
+    point: "50%, 73%"
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
@@ -276,8 +289,7 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     point: "90%, 62%"
 - tapOn:
-    text: "Next"
-    waitUntilVisible: true
+    point: "50%, 73%"
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
