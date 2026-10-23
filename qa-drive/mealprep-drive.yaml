@@ -75,13 +75,31 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD}"
-- tapOn:
-    point: "90%, 62%"
 - takeScreenshot: 03-password-step
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
+# FOCUS-RACE RECOVERY (drive 4): if the type raced and Continue
+# met an empty field, the app speaks "Type your password first,
+# then continue." — only then: re-tap, re-type, dismiss, submit.
+- runFlow:
+    when:
+      visible: "Type your password first, then continue."
+    commands:
+      - tapOn:
+          text: "Your password"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "${TEST_PASSWORD}"
+      - tapOn:
+          point: "90%, 62%"
+      - tapOn:
+          text: "Continue"
+          waitUntilVisible: true
 - extendedWaitUntil:
     notVisible:
       text: "Sign in or make your account"
@@ -206,12 +224,30 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD}"
-- tapOn:
-    point: "90%, 62%"
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
+# FOCUS-RACE RECOVERY (drive 4): if the type raced and Continue
+# met an empty field, the app speaks "Type your password first,
+# then continue." — only then: re-tap, re-type, dismiss, submit.
+- runFlow:
+    when:
+      visible: "Type your password first, then continue."
+    commands:
+      - tapOn:
+          text: "Your password"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "${TEST_PASSWORD}"
+      - tapOn:
+          point: "90%, 62%"
+      - tapOn:
+          text: "Continue"
+          waitUntilVisible: true
 - extendedWaitUntil:
     notVisible:
       text: "Sign in or make your account"
@@ -293,12 +329,30 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Your password"
     waitUntilVisible: true
+    retryTapIfNoChange: true
+- waitForAnimationToEnd
 - inputText: "${TEST_PASSWORD2}"
-- tapOn:
-    point: "90%, 62%"
 - tapOn:
     text: "Continue"
     waitUntilVisible: true
+# FOCUS-RACE RECOVERY (drive 4): if the type raced and Continue
+# met an empty field, the app speaks "Type your password first,
+# then continue." — only then: re-tap, re-type, dismiss, submit.
+- runFlow:
+    when:
+      visible: "Type your password first, then continue."
+    commands:
+      - tapOn:
+          text: "Your password"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "${TEST_PASSWORD2}"
+      - tapOn:
+          point: "90%, 62%"
+      - tapOn:
+          text: "Continue"
+          waitUntilVisible: true
 - extendedWaitUntil:
     notVisible:
       text: "Sign in or make your account"
