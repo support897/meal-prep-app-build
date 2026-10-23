@@ -486,14 +486,23 @@ appId: com.ilseplacencia.mealprep
     text: "Grandma soup"
     waitUntilVisible: true
 - inputText: "Sim drive meal one"
+# DRIVE 18 (run 39992726135) died at step-058, the ingredients
+# tap: v18's blind swipe pairs OVERSHOT — the Add form sits on
+# the same page as the recipe list, and two full swipes carried
+# the viewport past the whole form into the list (the failure
+# frame is recipe cards). A fixed swipe count cannot know a
+# form's height. v19: scrollUntilVisible travels to each field
+# and to the Save button — the scroll is transport, the tap
+# stays the judge (the CS v10 shape; these are small nodes that
+# can reach full visibility, so the Pace trap does not bind).
 - tapOn:
     text: "Done"
     waitUntilVisible: true
-- swipe:
-    direction: UP
-- swipe:
-    direction: UP
-- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "200 g chicken breast"
+    direction: DOWN
+    timeout: 60000
 - tapOn:
     text: "200 g chicken breast"
     waitUntilVisible: true
@@ -501,11 +510,11 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Done"
     waitUntilVisible: true
-- swipe:
-    direction: UP
-- swipe:
-    direction: UP
-- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Cook the chicken until golden"
+    direction: DOWN
+    timeout: 60000
 - tapOn:
     text: "Cook the chicken until golden"
     waitUntilVisible: true
@@ -513,11 +522,11 @@ appId: com.ilseplacencia.mealprep
 - tapOn:
     text: "Done"
     waitUntilVisible: true
-- swipe:
-    direction: UP
-- swipe:
-    direction: UP
-- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Save my recipe"
+    direction: DOWN
+    timeout: 60000
 - takeScreenshot: 08-recipe-form
 - tapOn:
     text: "Save my recipe"
