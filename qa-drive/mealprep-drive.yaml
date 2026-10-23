@@ -1,5 +1,5 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
-# Version: v13 (2026-10-24) — v12's STAGGER CURE LANDED on
+# Version: v27 (2026-10-24) — v12's STAGGER CURE LANDED on
 # drive 12 (run 39968772962): a handler poll FIRED (the
 # step-026 runFlow frame stands) and the card was met at the
 # ENTRY site — but the handler died at its "Save" tap
@@ -662,6 +662,30 @@ appId: com.ilseplacencia.mealprep
 # below-fold content never enters the visible tree (the Fit
 # v15 starvation, same family). Named-node travel first, as
 # TRANSPORT (the v19 law); the wait stays the judge.
+# DRIVE 26 (run 40019556150) died at the SECOND visit's
+# door wait, step-134: the first visit's whole spine leg
+# closed (month filled, sentinel saved, sign-out 1 landed,
+# relogin persistence proven), then the Preferences page
+# RESTORED its scroll (scroll memory), the DOWN transport
+# started mid-page, overshot past Sign out, and the tap
+# read tree bounds that no longer matched the viewport.
+# Cure (v27): a PAGE-TOP RESET before the transport at
+# BOTH sign-out sites — six DOWN swipes return the page
+# to scroll zero from anywhere on it, so the transport
+# always starts from the first visit's proven geometry.
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element:
       text: "Sign out"
@@ -840,6 +864,30 @@ appId: com.ilseplacencia.mealprep
 # below-fold content never enters the visible tree (the Fit
 # v15 starvation, same family). Named-node travel first, as
 # TRANSPORT (the v19 law); the wait stays the judge.
+# DRIVE 26 (run 40019556150) died at the SECOND visit's
+# door wait, step-134: the first visit's whole spine leg
+# closed (month filled, sentinel saved, sign-out 1 landed,
+# relogin persistence proven), then the Preferences page
+# RESTORED its scroll (scroll memory), the DOWN transport
+# started mid-page, overshot past Sign out, and the tap
+# read tree bounds that no longer matched the viewport.
+# Cure (v27): a PAGE-TOP RESET before the transport at
+# BOTH sign-out sites — six DOWN swipes return the page
+# to scroll zero from anywhere on it, so the transport
+# always starts from the first visit's proven geometry.
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element:
       text: "Sign out"
