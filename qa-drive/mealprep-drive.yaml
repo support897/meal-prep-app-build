@@ -564,7 +564,7 @@ appId: com.ilseplacencia.mealprep
           timeout: 30000
 - extendedWaitUntil:
     visible:
-      text: "Sim drive meal one"
+      text: "DINNER Sim drive meal one 30 minutes · 1 ingredients"
     timeout: 60000
 - takeScreenshot: 09-sentinel-saved
 # ---------- stage (iii): sign out through the app's own control -----
@@ -682,7 +682,7 @@ appId: com.ilseplacencia.mealprep
     waitUntilVisible: true
 - extendedWaitUntil:
     visible:
-      text: "Sim drive meal one"
+      text: "DINNER Sim drive meal one 30 minutes · 1 ingredients"
     timeout: 60000
 - takeScreenshot: 14-relogin-sentinel-stands
 # ---------- sign out again ------------------------------------------
@@ -823,10 +823,10 @@ appId: com.ilseplacencia.mealprep
 # Isolation: the first account's sentinel is ABSENT from this space.
 - extendedWaitUntil:
     notVisible:
-      text: "Sim drive meal one"
+      text: "DINNER Sim drive meal one 30 minutes · 1 ingredients"
     timeout: 60000
 - assertNotVisible:
-    text: "Sim drive meal one"
+    text: "DINNER Sim drive meal one 30 minutes · 1 ingredients"
 - takeScreenshot: 17-isolation-recipes
 - tapOn:
     text: "Hide or show the side menu"
