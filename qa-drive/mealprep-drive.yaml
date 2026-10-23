@@ -253,14 +253,30 @@ appId: com.ilseplacencia.mealprep
 # ---------- first-entry surfaces: the tour, then the name ask -------
 # A fresh account's tour stands after entry (the b23 spine + the b24
 # lib's post-entry dismissal both ride on it): waited for, skipped,
-# proven gone.
-- extendedWaitUntil:
-    visible:
-      text: "Skip tour"
-    timeout: 60000
-- tapOn:
-    text: "Skip tour"
-    waitUntilVisible: true
+# proven gone. DRIVE 16 (run 39982901359) killed the unconditional
+# form: account A's tour was skipped back on drive 9, so on a plain
+# return NOTHING stands here (its failure frame: a full calendar,
+# no card, no tour) — yet on drives 12/13 this same wait PASSED on
+# the name re-offer CARD, which also carries "Skip tour". The wait
+# is therefore a staggered conditional (the LATE MOUNT shape): if
+# a tour-shaped surface stands, or mounts a beat later, it is
+# skipped; if none stands, the flow proceeds — the name handlers
+# downstream still cover a card that mounts at the recipe sites.
+- runFlow:
+    when:
+      visible: "Skip tour"
+    commands:
+      - tapOn:
+          text: "Skip tour"
+          waitUntilVisible: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Skip tour"
+    commands:
+      - tapOn:
+          text: "Skip tour"
+          waitUntilVisible: true
 # Gone-proof, v2: NOT the node's absence — drive 1 proved the node
 # persists in the tree after dismissal. The proof is progress: if the
 # tour still stood, the sidebar + Calendar taps in stage (ii)a would
