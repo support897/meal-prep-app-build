@@ -1,4 +1,15 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v12 (2026-10-24) — drive 11 (run 39965684190)
+# travelled two steps past drive 10 and died at the same
+# assert (step-039): the card stood over the filled month
+# with its field EMPTY — v11's handler never fired. Its key
+# was exact (the failure hierarchy carries the heading's node
+# whole); the card simply MOUNTS LATE here — it presents
+# after the month's render settles, behind the handler's
+# one-shot poll. v12 polls the handler TWICE at each site,
+# staggered by a settle: the fleet's answer to late mounts
+# (the NeedsMe staggered-retry lesson). The card's own
+# behaviour stays the app's designed door law throughout.
 # Version: v11 (2026-10-23) — v10's SIDEBAR CURE LANDED on
 # drive 10 (run 39962288200): the sign-in, the calendar, and
 # the whole month fill all stood (the filled month in frame
@@ -268,6 +279,26 @@ appId: com.ilseplacencia.mealprep
           notVisible:
             text: "Hi! I'm Mina. Welcome in! What should we call you?"
           timeout: 30000
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Hi! I'm Mina. Welcome in! What should we call you?"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "Sim Driver MP"
+      - tapOn:
+          point: "90%, 62%"
+      - tapOn:
+          text: "Save"
+          waitUntilVisible: true
+      - extendedWaitUntil:
+          notVisible:
+            text: "Hi! I'm Mina. Welcome in! What should we call you?"
+          timeout: 30000
 # ---------- stage (ii)a: the plan — fill the first month ------------
 # The sidebar starts hidden; its toggle is icon-only (no visible
 # text exists — the flow addresses it by its DOM id; see NOTES).
@@ -289,6 +320,26 @@ appId: com.ilseplacencia.mealprep
       text: "No meals planned yet."
     timeout: 60000
 - takeScreenshot: 07-month-filled
+- runFlow:
+    when:
+      visible: "Hi! I'm Mina. Welcome in! What should we call you?"
+    commands:
+      - tapOn:
+          text: "Your name"
+          waitUntilVisible: true
+          retryTapIfNoChange: true
+      - waitForAnimationToEnd
+      - inputText: "Sim Driver MP"
+      - tapOn:
+          point: "90%, 62%"
+      - tapOn:
+          text: "Save"
+          waitUntilVisible: true
+      - extendedWaitUntil:
+          notVisible:
+            text: "Hi! I'm Mina. Welcome in! What should we call you?"
+          timeout: 30000
+- waitForAnimationToEnd
 - runFlow:
     when:
       visible: "Hi! I'm Mina. Welcome in! What should we call you?"
