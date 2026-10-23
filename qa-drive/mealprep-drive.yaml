@@ -1,4 +1,9 @@
 # Meal Prep 24 simulator drive — QA Tester chair.
+# Version: v32 (2026-10-24) — the relogin Recipes entry
+# gains the page-top reset between its retry and its
+# destination judge (drive 31: the navigation landed on a
+# scroll-restored page whose heading stood outside the
+# rendered window every key reads).
 # Version: v31 (2026-10-24) — the fill branch's polls lose
 # their inner waits; the empty-line judge moves to the top
 # level at 180 s (drive 30: a fatal wait inside the branch
@@ -936,6 +941,32 @@ appId: com.ilseplacencia.mealprep
                 text: "Recipes"
                 waitUntilVisible: true
             - waitForAnimationToEnd
+# DRIVE 31 (run 40037920307) died at the judge below,
+# step-139, standing ON THE RECIPES PAGE: the navigation
+# HAD landed, but the page restored the first visit's
+# scroll (the flow had scrolled to the list to verify the
+# sentinel), and this lane's tree carries only the rendered
+# window — the form's heading stood above it, invisible to
+# every key. The retry fired (its notVisible key read the
+# same absence) and re-tapping the current page's item does
+# not reset its scroll. Cure (v32): the PAGE-TOP RESET
+# (six DOWN swipes, the v27 sign-out shape) stands between
+# the retry and the judge at this entry; on a page never
+# reached, the swipes scroll the calendar harmlessly and
+# the judge still dies as designed.
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- swipe:
+    direction: DOWN
+- waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       text: "My own recipe"
