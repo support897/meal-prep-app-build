@@ -50,6 +50,21 @@
     out.onboarded = s.onboarded === true;
     out.notifications = typeof s.notifications === "string" ? s.notifications : d.notifications;
     out.preferences = Array.isArray(s.preferences) ? strList(s.preferences) : d.preferences;
+    out.diet = L.cleanDiet(s.diet);
+    out.maxCookMinutes = L.cleanCookMinutes(s.maxCookMinutes);
+    out.busyNights = L.cleanBusyNights(s.busyNights);
+    out.quickMinutes = L.cleanQuickMinutes(s.quickMinutes);
+    /* Cooked ticks and leftover links (29 Oct, item 12) only survive
+       in their exact shape and only for the last fortnight, so the
+       record stays small and honest. */
+    out.cooked = {}; out.leftovers = {};
+    const cookedCutoff = new Date(); cookedCutoff.setDate(cookedCutoff.getDate() - 14);
+    if (isPlainObj(s.cooked)) Object.keys(s.cooked).forEach(function (k) { if (s.cooked[k] === true && /^\d{4}\.\d{2}\.\d{2}\.(breakfast|lunch|dinner)$/.test(k) && L.parseKey(k.slice(0, 10)) >= cookedCutoff) out.cooked[k] = true; });
+    if (isPlainObj(s.leftovers)) Object.keys(s.leftovers).forEach(function (k) { if (typeof s.leftovers[k] === "string" && s.leftovers[k] && /^\d{4}\.\d{2}\.\d{2}\.(breakfast|lunch|dinner)$/.test(k) && L.parseKey(k.slice(0, 10)) >= cookedCutoff) out.leftovers[k] = s.leftovers[k]; });
+    out.defaultServings = L.cleanServings(s.defaultServings);
+    out.recipeIngredients = L.cleanRecipeIngredients(s.recipeIngredients);
+    out.recipeIngredientsManual = s.recipeIngredientsManual === true;
+    out.photoTrialUsed = s.photoTrialUsed === true;
     out.eatTimes = {};
     ["breakfast", "lunch", "dinner"].forEach(function (m) { out.eatTimes[m] = isPlainObj(s.eatTimes) && timeOk(s.eatTimes[m]) ? s.eatTimes[m] : d.eatTimes[m]; });
     out.setupMinutes = (typeof s.setupMinutes === "number" && isFinite(s.setupMinutes) && s.setupMinutes >= 0 && s.setupMinutes <= 240) ? s.setupMinutes : d.setupMinutes;
@@ -75,8 +90,16 @@
          own pick and is carried through exactly as stored. */
       return { id: typeof p.id === "string" && p.id ? p.id : "p" + (i + 1), name: String(p.name || "Person " + (i + 1)), color: typeof p.color === "string" && p.color ? L.mapPersonColor(p.color) : L.PERSON_COLORS[0], tags: strList(p.tags), dislikes: strList(p.dislikes), allergies: strList(p.allergies) };
     }) : d.family;
+    /* Guide-date honesty (b32 cure, QA F-MP32-2): a shelfDays number
+       on a food the shelf table does not know can only be the old add
+       path's fallback stamp, never a real guide, so it is dropped at
+       this repair boundary and the item goes back to having no date.
+       Leftover items keep theirs: their 3 days are the app's own
+       spoken guide, linked from out.leftovers above. */
+    const leftoverIds = {}; Object.keys(out.leftovers).forEach(function (k) { leftoverIds[out.leftovers[k]] = true; });
     out.pantry = Array.isArray(s.pantry) ? s.pantry.filter(isPlainObj).map(function (it, i) {
-      return { id: typeof it.id === "string" && it.id ? it.id : "g" + i, name: String(it.name || "food"), qty: (typeof it.qty === "number" && isFinite(it.qty) && it.qty >= 0) ? it.qty : 0, unit: typeof it.unit === "string" && it.unit ? it.unit : "pcs", storage: ["fridge", "freezer", "pantry"].indexOf(it.storage) !== -1 ? it.storage : "fridge", added: typeof it.added === "string" && it.added ? it.added : todayKey(), shelfDays: (typeof it.shelfDays === "number" && isFinite(it.shelfDays)) ? it.shelfDays : undefined };
+      const itId = typeof it.id === "string" && it.id ? it.id : "g" + i;
+      return { id: itId, name: String(it.name || "food"), qty: (typeof it.qty === "number" && isFinite(it.qty) && it.qty >= 0) ? it.qty : 0, unit: typeof it.unit === "string" && it.unit ? it.unit : "pcs", storage: ["fridge", "freezer", "pantry"].indexOf(it.storage) !== -1 ? it.storage : "fridge", added: typeof it.added === "string" && it.added ? it.added : todayKey(), shelfDays: (typeof it.shelfDays === "number" && isFinite(it.shelfDays) && (L.shelfKnown(it.name, D) || leftoverIds[itId])) ? it.shelfDays : undefined };
     }) : d.pantry;
     out.plan = isPlainObj(s.plan) ? s.plan : {};
     out.planCleared = s.planCleared === true;
@@ -129,7 +152,42 @@
     return out;
   }
   let notifReschedTimer = null;
-  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} if (window.MP_ACCOUNT_HOOK && window.MP_ACCOUNT_HOOK.onSave) window.MP_ACCOUNT_HOOK.onSave(); queueNotifReschedule(); }
+  let localSaveTimer = null;
+  const SAVE_DEBOUNCE_MS = 500;
+  function writeLocalState() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
+  function flushLocalSave() {
+    if (localSaveTimer === null) return;
+    clearTimeout(localSaveTimer);
+    localSaveTimer = null;
+    writeLocalState();
+  }
+  function flushPendingSave() {
+    flushLocalSave();
+    const hook = window.MP_ACCOUNT_HOOK;
+    if (hook && hook.flushPush) {
+      try { return hook.flushPush(); } catch (e) { return Promise.reject(e); }
+    }
+    return Promise.resolve();
+  }
+  window.MP_APP_HOOK = { flushLocal: flushLocalSave };
+  let leaveFlush = null;
+  function flushOnLeave() {
+    if (leaveFlush) return leaveFlush;
+    leaveFlush = flushPendingSave().catch(function () {});
+    return leaveFlush;
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") { leaveFlush = null; return; }
+    flushOnLeave();
+  });
+  window.addEventListener("pagehide", flushOnLeave);
+  window.addEventListener("beforeunload", flushOnLeave);
+  function save() {
+    if (localSaveTimer !== null) clearTimeout(localSaveTimer);
+    localSaveTimer = setTimeout(function () { localSaveTimer = null; writeLocalState(); }, SAVE_DEBOUNCE_MS);
+    if (window.MP_ACCOUNT_HOOK && window.MP_ACCOUNT_HOOK.onSave) window.MP_ACCOUNT_HOOK.onSave();
+    queueNotifReschedule();
+  }
   /* Accounts wave (v23): the activation stamp hook. A meal landing on a
      day through the user's OWN action (an add or swap in the day view,
      or a planner run the user tapped) is the app's activation event
@@ -155,6 +213,8 @@
      data, so it is not escaped. */
   function emptyState(iconName, text, btnLabel, btnAction) { return "<div class='emptyState'><span class='emptyCircle'>" + icon(iconName, "iconEmpty") + "</span><p class='hint'>" + text + "</p>" + (btnLabel ? "<button class='pillBtn' data-empty-action='" + (btnAction || "") + "'>" + btnLabel + "</button>" : "") + "</div>"; }
   function allRecipes() { return D.RECIPES.concat(state.customRecipes); }
+  function eligibleRecipes() { return allRecipes().filter(function (r) { return L.recipeAllowed(r, planCtx(), D); }); }
+  function recipesForServingCount() { return eligibleRecipes().map(function (r) { return L.scaleRecipe(r, state.defaultServings); }); }
   function recipeById(id) { return allRecipes().filter(function (r) { return r.id === id; })[0]; }
   /* Recipe content in the active language (app v36, the LANGUAGE
      BUILD phase 2). A built in recipe carries Spanish fields (data.js
@@ -169,6 +229,12 @@
      untouched by this content. */
   function rName(r) { return r && LANG.lang() === "es" && r.es && r.es.name ? r.es.name : (r ? r.name : ""); }
   function rIngName(r, i) { const ing = r.ingredients[i]; return LANG.lang() === "es" && r.es && r.es.ingredients && r.es.ingredients[i] ? r.es.ingredients[i] : ing.name; }
+  function rIngLine(r, ingredient, index) {
+    const hasQty = ingredient.qty !== null && ingredient.qty !== undefined && ingredient.qty !== "";
+    const amount = hasQty ? [String(ingredient.qty), ingredient.unit && ingredient.unit !== "to taste" ? ingredient.unit : ""].filter(Boolean).join(" ") : (ingredient.unit === "to taste" ? t("recipes.toTaste") : "");
+    const note = ingredient.note ? " (" + ingredient.note + ")" : "";
+    return esc([amount, rIngName(r, index)].filter(Boolean).join(" ") + note);
+  }
   function rSteps(r) { return LANG.lang() === "es" && r.es && Array.isArray(r.es.steps) && r.es.steps.length === r.steps.length && r.es.steps.every(function (s) { return !!s; }) ? r.es.steps : r.steps; }
   /* The grocery list built from the plan shows ingredient names that
      exist only because recipes were planned, so its showing follows
@@ -179,6 +245,12 @@
      adds by hand keep the data words, always. */
   const ING_ES = {};
   D.RECIPES.forEach(function (r) { if (r.es) r.ingredients.forEach(function (ing, i) { const k = ing.name.toLowerCase(); if (!(k in ING_ES)) ING_ES[k] = r.es.ingredients[i]; }); });
+  Object.assign(ING_ES, {
+    "egg": "huevo", "milk": "leche", "cheese": "queso", "chicken breast": "pechuga de pollo",
+    "beef mince": "carne molida de res", "tomato": "tomate", "cucumber": "pepino",
+    "carrot": "zanahoria", "spinach": "espinaca", "avocado": "aguacate", "lemon": "limón",
+    "yogurt": "yogur", "butter": "mantequilla", "broccoli": "brócoli", "capsicum": "pimiento"
+  });
   function listIngName(name) { return LANG.lang() === "es" && ING_ES[name.toLowerCase()] ? ING_ES[name.toLowerCase()] : name; }
   /* Shelf labels resolve the same way recipe names do (QA F1): under
      Spanish the entry's Spanish label shows; a missing or blank
@@ -411,7 +483,7 @@
     return L.sortByExpiry(state.pantry, new Date()).slice(0, 8).map(function (i) { return i.name; });
   }
   function planCtx() {
-    return { preferences: state.preferences, family: state.family, expiringNames: expiringNames(), customRecipes: state.customRecipes };
+    return { preferences: state.preferences, family: state.family, expiringNames: expiringNames(), pantryNames: state.pantry.map(function (item) { return item.name; }), customRecipes: state.customRecipes, diet: state.diet, maxCookMinutes: state.maxCookMinutes, defaultServings: state.defaultServings, busyNights: state.busyNights, quickMinutes: state.quickMinutes };
   }
   function ensureDay(key) {
     if (state.plan[key]) return;
@@ -420,14 +492,20 @@
        users carry autoPlan true from their saved state and never see this. */
     if (state.planCleared || !state.autoPlan) { state.plan[key] = {}; return; }
     const usedCounts = {}; const recent = [];
-    Object.keys(state.plan).forEach(function (k) {
+    /* The no repeat memory is the last 14 days (29 Oct, item 5):
+       use counts still span the whole plan, but the recent penalty
+       only looks back a fortnight, in day order. */
+    const target = L.parseKey(key); const windowStart = new Date(target); windowStart.setDate(windowStart.getDate() - 14);
+    Object.keys(state.plan).sort().forEach(function (k) {
+      const inWindow = L.parseKey(k) >= windowStart && L.parseKey(k) < target;
       ["breakfast", "lunch", "dinner"].forEach(function (m) {
-        const id = state.plan[k][m]; if (id) { usedCounts[id] = (usedCounts[id] || 0) + 1; recent.push(id); }
+        const id = state.plan[k][m]; if (id) { usedCounts[id] = (usedCounts[id] || 0) + 1; if (inWindow) recent.push(id); }
       });
     });
     const dayPlan = {};
+    const dayCtx = L.planCtxForDay(planCtx(), key);
     ["breakfast", "lunch", "dinner"].forEach(function (meal) {
-      const r = L.pickRecipe(meal, Object.assign({}, planCtx(), { recentIds: recent.slice(-6), usedCounts: usedCounts }), D);
+      const r = L.pickRecipe(meal, Object.assign({}, dayCtx, { recentIds: recent.slice(-42), usedCounts: usedCounts }), D);
       if (r) { dayPlan[meal] = r.id; recent.push(r.id); usedCounts[r.id] = (usedCounts[r.id] || 0) + 1; }
     });
     state.plan[key] = dayPlan; save();
@@ -465,6 +543,7 @@
     const hidden = !state.ui ? true : state.ui.sidebarHidden === true;
     document.body.classList.toggle("sidebarHidden", hidden);
     const t = $("sidebarToggle"); if (t) t.setAttribute("aria-pressed", hidden ? "true" : "false");
+    const more = $("bottomMoreBtn"); if (more) more.setAttribute("aria-expanded", hidden ? "false" : "true");
   }
   function setSidebar(hidden, moveFocus) {
     if (!state.ui) state.ui = { sidebarHidden: true };
@@ -560,6 +639,27 @@
   document.querySelectorAll(".navBtn").forEach(function (b) {
     b.addEventListener("click", function () { switchView(b.getAttribute("data-nav")); });
   });
+  document.querySelectorAll(".bottomNavBtn[data-view]").forEach(function (b) {
+    b.addEventListener("click", function () { switchView(b.getAttribute("data-view")); });
+  });
+  $("bottomMoreBtn").addEventListener("click", function () {
+    const hidden = document.body.classList.contains("sidebarHidden");
+    setSidebar(!hidden, hidden);
+  });
+  function syncBottomNav(v) {
+    const core = ["calendar", "recipes", "groceries", "list"];
+    document.querySelectorAll(".bottomNavBtn[data-view]").forEach(function (b) {
+      const on = b.getAttribute("data-view") === v;
+      b.classList.toggle("active", on);
+      if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    });
+    const more = $("bottomMoreBtn");
+    if (more) {
+      const on = core.indexOf(v) === -1;
+      more.classList.toggle("active", on);
+      if (on) more.setAttribute("aria-current", "page"); else more.removeAttribute("aria-current");
+    }
+  }
   function switchView(v) {
     currentView = v;
     document.querySelectorAll(".navBtn").forEach(function (b) {
@@ -572,6 +672,7 @@
     const g = L.navGroupForView(v);
     if (g && tuckedList().indexOf(g) === -1) openGroupId = g;
     renderNav();
+    syncBottomNav(v);
     render();
     /* QA F1 (build 9): a nav choice on the phone shape lands the
        person ON the view, so the drawer closes with the switch.
@@ -583,6 +684,7 @@
     if (window.matchMedia("(max-width: 900px)").matches && state.ui && state.ui.sidebarHidden !== true) setSidebar(true, false);
   }
   function render() {
+    syncBottomNav(currentView);
     renderSide();
     if (currentView === "calendar") renderCalendar();
     if (currentView === "recipes") renderRecipes();
@@ -595,11 +697,14 @@
   }
   /* Calories come from the USDA table in nutrition.js. A recipe with an
      ingredient outside the table returns null and shows no number at all. */
-  function kcalPerServing(r) { return L.recipeKcal(r, NUT); }
+  function kcalPerServing(r) {
+    const sourceKcal = r && r.nutritionPerServing && Number(r.nutritionPerServing.calories);
+    return isFinite(sourceKcal) && sourceKcal > 0 ? Math.round(sourceKcal) : L.recipeKcal(r, NUT);
+  }
   function kcalText(r) { const k = kcalPerServing(r); return k ? t("kcal.about", { n: k }) : ""; }
   function renderSide() {
     const sorted = L.sortByExpiry(state.pantry, new Date());
-    const soon = sorted.filter(function (i) { return L.daysLeft(i, new Date()) <= 3; });
+    const soon = sorted.filter(function (i) { return (typeof i.shelfDays === "number" || L.shelfKnown(i.name, D)) && L.daysLeft(i, new Date()) <= 3; });
     $("expiringList").innerHTML = soon.length ? soon.map(function (i) {
       const dl = L.daysLeft(i, new Date());
       return "<div><strong>" + esc(i.name) + "</strong> · " + (dl < 0 ? t("side.pastBest") : dl === 0 ? t("side.useToday") : t(dl === 1 ? "common.dayLeft" : "common.daysLeft", { n: dl })) + "</div>";
@@ -609,7 +714,22 @@
     $("todayCard").innerHTML = ["breakfast", "lunch", "dinner"].map(function (meal) {
       const r = recipeById(plan[meal]);
       return "<div>" + mealIcon(meal) + "<strong>" + mealLabel(meal) + ":</strong> " + (r ? esc(rName(r)) : t("side.nothingPlanned")) + "</div>";
-    }).join("");
+    }).join("") + (plan.dinner ? "" : "<div class='row'><span class='hint'>" + t("side.noDinner") + "</span><button class='miniBtn' id='planDinnerBtn'>" + t("side.planDinner") + "</button></div>");
+    /* No dinner tonight (29 Oct, item 14): one kind line, one tap,
+       and the planner fills tonight only, busy night rules included.
+       The tap is the person planning on purpose, so it also stands
+       under the Empty Start law. */
+    const pdb = $("planDinnerBtn");
+    if (pdb) pdb.addEventListener("click", function () {
+      const key = todayKey();
+      const r = L.pickRecipe("dinner", Object.assign({}, L.planCtxForDay(planCtx(), key)), D);
+      if (!r) return;
+      if (!state.plan[key]) state.plan[key] = {};
+      state.plan[key].dinner = r.id;
+      state.planCleared = false;
+      save(); renderSide(); renderCalendar();
+      toast(t("toast.dinnerPlanned", { name: rName(r) }));
+    });
   }
 
   /* Calendar */
@@ -693,7 +813,7 @@
         const r = recipeById(state.plan[key][meal]); const m = D.MEALS[meal];
         if (!r) return "";
         const start = L.reminderTime(state.eatTimes[meal], r.minutes, state.setupMinutes);
-        const options = allRecipes().filter(function (x) { return x.meal === meal; }).map(function (x) {
+        const options = eligibleRecipes().filter(function (x) { return x.meal === meal; }).map(function (x) {
           return "<option value='" + x.id + "'" + (x.id === r.id ? " selected" : "") + ">" + esc(rName(x)) + "</option>";
         }).join("");
         /* The skip tick (build 5, spec (a)): one tap on the meal's own
@@ -781,9 +901,23 @@
   function syncSeg() { $("viewSwitch").querySelectorAll(".seg").forEach(function (x) { x.classList.toggle("active", x.getAttribute("data-viewmode") === viewMode); }); }
 
   /* Recipe modal */
+  /* Who is eating (29 Oct, item 13): the sheet opens at the saved
+     servings, and the stepper or the family chips can change the
+     amounts for this open only. The choice is remembered while the
+     same recipe stays open and forgotten for the next one. */
+  let modalRecipeId = null, modalServings = null, modalEaters = null;
   function openRecipe(id) {
-    const r = recipeById(id); if (!r) return;
+    const baseRecipe = recipeById(id); if (!baseRecipe) return;
+    if (!L.recipeAllowed(baseRecipe, planCtx(), D)) { toast(t("recipe.notSuitable")); return; }
+    if (modalRecipeId !== id) { modalRecipeId = id; modalServings = null; modalEaters = null; }
+    if (!modalEaters) modalEaters = state.family.map(function (p) { return p.id; });
+    const targetServings = modalServings || state.defaultServings;
+    const r = L.scaleRecipe(baseRecipe, targetServings);
     const ads = L.adaptations(r, state.family, D);
+    const favorite = state.favorites.indexOf(r.id) !== -1;
+    const sourceHtml = r.sourceName ? "<p class='hint recipeSource'>" + t("recipes.sourceLine") + " <a href='" + esc(r.sourceUrl) + "' target='_blank' rel='noopener noreferrer'>" + esc(r.sourceName) + "</a> · <a href='" + esc(r.sourceLicenseUrl) + "' target='_blank' rel='noopener noreferrer'>" + esc(r.sourceLicense) + "</a></p>" : "";
+    const sourceLanguageHtml = r.sourceName && LANG.lang() === "es" ? "<p class='hint'>" + t("recipes.sourceEnglishNote") + "</p>" : "";
+    const dietNote = r.halalFriendly && state.diet === "halalFriendly" ? "<p class='hint'>" + t("prefs.halalNote") + "</p>" : "";
     /* The allergy boxes are legal flagged wording (v34): their lines
        resolve through the legal.* keys, which ship in English under
        every language. The dislike boxes use the translated keys. */
@@ -796,20 +930,59 @@
       return "<div class='adaptBox'><span class='avatarCircle' style='background:" + color + "'>" + esc(a.person.slice(0, 1)) + "</span> <strong>" + esc(a.person) + "</strong>: " +
         (a.allergy ? "<span class='useFirst'>" + icon("triangle-alert", "iconSm") + " " + t("legal.allergyWord") + "</span> " : "") + line + " " + t(a.allergy ? "legal.allergyEveryone" : "recipe.everyoneElse") + "</div>";
     }).join("") : "<p class='hint'>" + t("recipe.noChanges") + "</p>";
+    /* Cooked today (29 Oct, item 12): when this recipe is on today's
+       plan, the sheet offers the cooked tick for that meal, and after
+       it, one tap to keep the leftovers on the shelf. */
+    const cookedKey = todayKey();
+    const cookedSlots = ["breakfast", "lunch", "dinner"].filter(function (m) { return state.plan[cookedKey] && state.plan[cookedKey][m] === r.id && !state.skips[cookedKey + "." + m]; });
+    const cookedHtml = cookedSlots.map(function (m) {
+      const ck = cookedKey + "." + m;
+      if (state.cooked[ck]) return "<div class='row'><span class='pMeta'>" + mealLabel(m) + "</span><span class='fresh'>" + t("recipe.cookedWord") + "</span>" + (state.leftovers[ck] ? "" : "<button class='pillBtn' data-leftovers='" + ck + "'>" + t("recipe.saveLeftovers") + "</button>") + "</div>";
+      return "<div class='row'><span class='pMeta'>" + mealLabel(m) + "</span><button class='pillBtn' data-cooked='" + ck + "'>" + t("recipe.markCooked") + "</button></div>";
+    }).join("");
     $("recipeModalCard").innerHTML =
       "<div class='row' style='justify-content:space-between'><span>" + mealBadge(r.meal) + "</span><button class='roundBtn' id='closeRecipe' aria-label='" + t("common.close") + "'>" + icon("x") + "</button></div>" +
       "<h2>" + esc(rName(r)) + "</h2>" +
       "<p class='hint'>" + t("recipe.metaLine", { min: r.minutes, n: r.servings }) + (kcalText(r) ? " · " + kcalText(r) + " " + t("recipe.perServing") : "") + " · " + r.cuisines.map(esc).join(", ") + "</p>" +
-      (kcalText(r) ? "<p class='hint'>" + t("legal.calorieMethod") + "</p>" : "") +
-      "<h3>" + t("recipe.ingredients") + "</h3><ul class='ingList'>" + r.ingredients.map(function (i, ix) { return "<li>" + esc(i.qty) + " " + esc(i.unit) + " " + esc(rIngName(r, ix)) + "</li>"; }).join("") + "</ul>" +
+      (kcalText(r) ? "<p class='hint'>" + t("legal.calorieMethod") + "</p>" : "") + sourceHtml + sourceLanguageHtml + dietNote +
+      "<div class='row'><span class='pMeta'>" + t("recipe.cookingFor") + "</span><button class='miniBtn' id='servMinus' aria-label='-'>-</button><strong>" + targetServings + "</strong><button class='miniBtn' id='servPlus' aria-label='+'>+</button></div>" +
+      (state.family.length ? "<div class='chipRow'>" + state.family.map(function (p) { return "<button class='chip" + (modalEaters.indexOf(p.id) !== -1 ? " on" : "") + "' data-eater='" + p.id + "'>" + esc(p.name) + "</button>"; }).join("") + "</div>" : "") +
+      "<h3>" + t("recipe.ingredients") + "</h3><ul class='ingList'>" + r.ingredients.map(function (i, ix) { return "<li>" + rIngLine(r, i, ix) + "</li>"; }).join("") + "</ul>" +
       "<h3>" + t("recipe.howTo") + "</h3><ol class='stepsList'>" + rSteps(r).map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol>" +
       adsHtml +
-      "<div class='row'><button class='primaryBtn' id='addMissing'>" + t("recipe.addMissing") + "</button><button class='pillBtn' id='closeRecipe2'>" + t("common.close") + "</button>" +
+      cookedHtml +
+      "<div class='row'><button class='pillBtn' id='toggleFavorite' aria-pressed='" + (favorite ? "true" : "false") + "'>" + t(favorite ? "recipe.removeFavorite" : "recipe.saveFavorite") + "</button><button class='primaryBtn' id='startCook'>" + t("recipe.startCooking") + "</button><button class='primaryBtn' id='addMissing'>" + t("recipe.addMissing") + "</button><button class='pillBtn' id='closeRecipe2'>" + t("common.close") + "</button>" +
       (state.customRecipes.some(function (x) { return x.id === r.id; }) ? "<button class='pillBtn danger' id='deleteRecipe'>" + icon("trash-2", "iconSm") + " " + t("recipe.deleteMine") + "</button>" : "") + "</div>";
     $("recipeModal").classList.remove("hidden");
     const close = function () { $("recipeModal").classList.add("hidden"); };
     $("closeRecipe").addEventListener("click", close);
     $("closeRecipe2").addEventListener("click", close);
+    $("toggleFavorite").addEventListener("click", function () {
+      const index = state.favorites.indexOf(r.id);
+      if (index === -1) state.favorites.push(r.id); else state.favorites.splice(index, 1);
+      const isSaved = state.favorites.indexOf(r.id) !== -1;
+      this.setAttribute("aria-pressed", isSaved ? "true" : "false");
+      this.textContent = t(isSaved ? "recipe.removeFavorite" : "recipe.saveFavorite");
+      save(); renderFavorites();
+      toast(t(isSaved ? "recipe.favoriteSaved" : "recipe.favoriteRemoved"));
+    });
+    /* Servings stepper and who is eating (29 Oct, item 13): both
+       re-open the sheet at the new scale. A chip tap sets the count
+       to the people eating; the last lit chip cannot go out,
+       because somebody is eating. */
+    $("servMinus").addEventListener("click", function () { modalServings = Math.max(1, targetServings - 1); openRecipe(r.id); });
+    $("servPlus").addEventListener("click", function () { modalServings = Math.min(12, targetServings + 1); openRecipe(r.id); });
+    $("recipeModalCard").querySelectorAll("[data-eater]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const pid = b.getAttribute("data-eater");
+        const ix = modalEaters.indexOf(pid);
+        if (ix === -1) modalEaters.push(pid);
+        else if (modalEaters.length > 1) modalEaters.splice(ix, 1);
+        modalServings = Math.max(1, modalEaters.length);
+        openRecipe(r.id);
+      });
+    });
+    $("startCook").addEventListener("click", function () { renderCook(r, cookPlace[r.id] || 0); });
     $("addMissing").addEventListener("click", function () {
       let n = 0;
       r.ingredients.forEach(function (i) {
@@ -819,45 +992,217 @@
       });
       save(); toast(n ? t("toast.addedItems", { n: n }) : t("toast.haveEverything"));
     });
+    /* Mark cooked (29 Oct, item 12): the shelf loses what the meal
+       used, at the servings the plan cooks for, and the sheet
+       reopens so the tick and the leftovers button show at once. */
+    $("recipeModalCard").querySelectorAll("[data-cooked]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const ck = b.getAttribute("data-cooked");
+        const scaled = recipesForServingCount().filter(function (x) { return x.id === r.id; })[0] || L.scaleRecipe(r, state.defaultServings);
+        const res = L.applyCooked(state.pantry, scaled);
+        state.pantry = res.pantry;
+        state.cooked[ck] = true;
+        save(); renderSide(); if (currentView === "groceries") renderGroceries();
+        openRecipe(r.id);
+        toast(res.taken.length ? t("toast.cookedShelf", { names: res.taken.join(", ") }) : t("toast.cookedPlain"));
+      });
+    });
+    $("recipeModalCard").querySelectorAll("[data-leftovers]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const ck = b.getAttribute("data-leftovers");
+        const item = { id: "g" + Date.now(), name: r.name, qty: L.cleanServings(state.defaultServings), unit: "pcs", storage: "fridge", added: todayKey(), shelfDays: 3 };
+        state.pantry.push(item);
+        state.leftovers[ck] = item.id;
+        save(); renderSide(); if (currentView === "groceries") renderGroceries();
+        openRecipe(r.id);
+        toast(t("toast.leftoversSaved", { name: rName(r) }));
+      });
+    });
     /* A recipe the user added is theirs to delete (Law B2 undo toast). The
        exact record is held, so Undo puts the same recipe back. */
     const delBtn = $("deleteRecipe");
     if (delBtn) delBtn.addEventListener("click", function () {
       const idx = state.customRecipes.findIndex(function (x) { return x.id === r.id; });
       if (idx === -1) { close(); return; }
+      const wasFavorite = state.favorites.indexOf(r.id) !== -1;
       const cut = L.removeAt(state.customRecipes, idx);
-      state.customRecipes = cut.list; close(); save(); renderRecipes();
+      state.customRecipes = cut.list;
+      state.favorites = state.favorites.filter(function (favoriteId) { return favoriteId !== r.id; });
+      close(); save(); renderRecipes();
       toastUndo(t("recipe.deletedToast", { name: rName(r) }), function () {
         state.customRecipes = L.restoreAt(state.customRecipes, cut.item, cut.index);
+        if (wasFavorite && state.favorites.indexOf(r.id) === -1) state.favorites.push(r.id);
         save(); renderRecipes();
+      });
+    });
+  }
+  /* Cook mode (29 Oct, item 7): one big step at a time, the screen
+     kept awake where the platform allows it, and any time written
+     inside a step ("roast 45 minutes") becomes a tap to start timer.
+     Several timers can run at once. Your place is remembered per
+     recipe while the app stays open, and today's other meals sit
+     one tap away, like pinned recipes. */
+  const cookPlace = {};
+  const cookTimers = {};
+  let cookTick = null, cookWake = null, cookSeq = 0;
+  async function cookLockScreen() { try { if (navigator.wakeLock) cookWake = await navigator.wakeLock.request("screen"); } catch (e) { /* the screen may sleep; cooking goes on */ } }
+  function cookUnlockScreen() { try { if (cookWake) { cookWake.release(); cookWake = null; } } catch (e) { /* already released */ } }
+  function stepSegments(text) {
+    const re = /(\d+(?:[.,]\d+)?)\s*(hours?|hrs?|horas?|minutes?|mins?|minutos?|seconds?|secs?|segundos?)/gi;
+    const out = []; let last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) out.push({ text: text.slice(last, m.index) });
+      const n = parseFloat(m[1].replace(",", "."));
+      const unit = m[2].toLowerCase();
+      const secs = Math.round(n * (/^h/.test(unit) ? 3600 : /^se/.test(unit) ? 1 : 60));
+      out.push({ timer: secs, label: m[0] });
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push({ text: text.slice(last) });
+    return out;
+  }
+  function cookClock(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+  function cookTickFn() {
+    let any = false;
+    Object.keys(cookTimers).forEach(function (tid) {
+      const tm = cookTimers[tid]; const el = document.getElementById(tid);
+      if (!el) { delete cookTimers[tid]; return; }
+      any = true;
+      const left = tm.endsAt - Date.now();
+      if (left <= 0) { el.textContent = tm.label + " · " + t("cook.timeUp"); el.classList.add("timerDone"); el.classList.remove("timerRun"); delete cookTimers[tid]; toast(t("cook.timerDone", { label: tm.label })); }
+      else el.textContent = tm.label + " · " + cookClock(left);
+    });
+    if (!any && cookTick) { clearInterval(cookTick); cookTick = null; }
+  }
+  function renderCook(r, ix) {
+    const steps = rSteps(r);
+    const stepIx = Math.max(0, Math.min(ix, steps.length - 1));
+    cookPlace[r.id] = stepIx;
+    cookLockScreen();
+    const todayPlan = state.plan[todayKey()] || {};
+    const others = ["breakfast", "lunch", "dinner"].map(function (m) { return todayPlan[m]; }).filter(function (oid, pos, arr) { return oid && oid !== r.id && arr.indexOf(oid) === pos; }).map(function (oid) { return recipeById(oid); }).filter(Boolean);
+    const segs = stepSegments(steps[stepIx] || "");
+    $("recipeModalCard").innerHTML =
+      "<div class='row' style='justify-content:space-between'><button class='pillBtn' id='cookBack'>" + t("cook.back") + "</button><strong>" + t("cook.title") + "</strong><button class='roundBtn' id='cookClose' aria-label='" + t("common.close") + "'>" + icon("x") + "</button></div>" +
+      "<h2>" + esc(rName(r)) + "</h2>" +
+      (others.length ? "<p class='pMeta'>" + t("cook.alsoToday") + "</p><div class='chipRow'>" + others.map(function (o) { return "<button class='chip' data-cook-switch='" + o.id + "'>" + esc(rName(o)) + "</button>"; }).join("") + "</div>" : "") +
+      "<p class='pMeta'>" + t("cook.stepOf", { a: stepIx + 1, b: steps.length }) + "</p>" +
+      "<div class='cookStep'>" + segs.map(function (s) { return s.timer ? "<button class='timerChip' id='tm" + (++cookSeq) + "' data-timer-secs='" + s.timer + "' data-timer-label='" + esc(s.label) + "'>" + icon("clock", "iconSm") + " " + esc(s.label) + "</button>" : esc(s.text); }).join("") + "</div>" +
+      "<details class='cookIng'><summary>" + t("recipe.ingredients") + "</summary><ul class='ingList'>" + r.ingredients.map(function (i, ix2) { return "<li>" + rIngLine(r, i, ix2) + "</li>"; }).join("") + "</ul></details>" +
+      "<div class='row'><button class='pillBtn' id='cookPrev'" + (stepIx === 0 ? " disabled" : "") + ">" + t("cook.prev") + "</button><button class='primaryBtn' id='cookNext'>" + (stepIx >= steps.length - 1 ? t("cook.finish") : t("cook.next")) + "</button></div>";
+    $("recipeModal").classList.remove("hidden");
+    $("cookBack").addEventListener("click", function () { cookUnlockScreen(); openRecipe(r.id); });
+    $("cookClose").addEventListener("click", function () { cookUnlockScreen(); $("recipeModal").classList.add("hidden"); });
+    const prev = $("cookPrev"); if (prev) prev.addEventListener("click", function () { renderCook(r, stepIx - 1); });
+    $("cookNext").addEventListener("click", function () { if (stepIx >= steps.length - 1) { cookUnlockScreen(); openRecipe(r.id); } else renderCook(r, stepIx + 1); });
+    $("recipeModalCard").querySelectorAll("[data-cook-switch]").forEach(function (b) { b.addEventListener("click", function () { const o = recipeById(b.getAttribute("data-cook-switch")); if (o) renderCook(L.scaleRecipe(o, modalServings || state.defaultServings), cookPlace[o.id] || 0); }); });
+    $("recipeModalCard").querySelectorAll("[data-timer-secs]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (cookTimers[b.id]) return;
+        cookTimers[b.id] = { endsAt: Date.now() + Number(b.getAttribute("data-timer-secs")) * 1000, label: b.getAttribute("data-timer-label") };
+        b.classList.add("timerRun");
+        if (!cookTick) cookTick = setInterval(cookTickFn, 500);
+        cookTickFn();
       });
     });
   }
   $("recipeModal").addEventListener("click", function (e) { if (e.target === $("recipeModal")) $("recipeModal").classList.add("hidden"); });
 
+  /* Favourites are recipe ids on the signed-in profile, so the list
+     follows its owner across sign-in and devices without duplicating recipes. */
+  function renderFavorites() {
+    const root = $("favoriteRecipeList");
+    const saved = state.favorites.map(function (id) { return recipeById(id); }).filter(Boolean);
+    const shown = saved.filter(function (r) { return L.recipeAllowed(r, planCtx(), D); });
+    if (!shown.length) {
+      root.innerHTML = emptyState("chef-hat", saved.length ? t("recipes.favoriteFiltered") : t("recipes.favoritesEmpty"));
+      return;
+    }
+    root.innerHTML = shown.map(function (r) {
+      return "<button class='recipeCard' data-favorite-recipe='" + r.id + "'>" + mealBadge(r.meal) + "<div class='mealName'>" + esc(rName(r)) + "</div><div class='pMeta'>" + icon("clock", "iconSm") + " " + t("recipes.cardMeta", { min: r.minutes, n: r.ingredients.length }) + "</div></button>";
+    }).join("");
+    root.querySelectorAll("[data-favorite-recipe]").forEach(function (b) { b.addEventListener("click", function () { openRecipe(b.getAttribute("data-favorite-recipe")); }); });
+  }
   /* Recipes view */
+  let recipeListLimit = 30;
+  function recipeIngredientsNow() {
+    return L.cleanRecipeIngredients(state.recipeIngredientsManual ? state.recipeIngredients : state.pantry.map(function (item) { return item.name; }));
+  }
+  function renderRecipeIngredientChips() {
+    const root = $("recipeIngredientChips"); if (!root) return;
+    const names = recipeIngredientsNow();
+    root.innerHTML = names.length ? names.map(function (name) {
+      return "<button type='button' class='chip recipeIngredientChip' data-remove-recipe-ingredient='" + esc(name) + "' aria-label='" + esc(t("recipes.removeIngredient", { name: name })) + "'>" + esc(listIngName(name)) + " <span aria-hidden='true'>×</span></button>";
+    }).join("") : "<p class='hint'>" + t("recipes.noIngredients") + "</p>";
+    root.querySelectorAll("[data-remove-recipe-ingredient]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        const name = button.getAttribute("data-remove-recipe-ingredient").toLowerCase();
+        state.recipeIngredients = recipeIngredientsNow().filter(function (item) { return item.toLowerCase() !== name; });
+        state.recipeIngredientsManual = true; save(); renderRecipes();
+      });
+    });
+  }
+  function recipeMatchLine(result) {
+    const match = result.match;
+    if (!match.availableCount) return "<div class='recipeMatchMeta'>" + t("recipes.addForMatches") + "</div>";
+    const use = t("recipes.usesCount", { used: match.usedCount, total: match.needCount });
+    const missing = match.missing.length ? t(match.missing.length === 1 ? "recipes.missingOne" : "recipes.missingMany", { n: match.missing.length }) : t("recipes.haveEverything");
+    const needs = match.missing.length ? "<span class='recipeMissingNames'>" + t("recipes.stillNeed", { items: match.missing.slice(0, 3).map(esc).join(", ") + (match.missing.length > 3 ? "…" : "") }) + "</span>" : "";
+    return "<div class='recipeMatchMeta'><strong>" + use + "</strong><span>" + missing + "</span>" + needs + "</div>";
+  }
   function renderRecipes() {
-    /* Your own recipes get their own card (design section 3A): while there
-       are none, it carries the designed empty state; the built in library
-       lists below either way. */
     const own = $("ownRecipeList");
-    if (!state.customRecipes.length) {
-      own.innerHTML = emptyState("chef-hat", t("recipes.ownEmpty"), t("recipes.addTitle"), "addRecipe");
-      own.querySelector("[data-empty-action='addRecipe']").addEventListener("click", function () { $("ownName").scrollIntoView({ block: "center" }); $("ownName").focus(); });
+    const eligibleOwn = state.customRecipes.filter(function (r) { return L.recipeAllowed(r, planCtx(), D); });
+    if (!eligibleOwn.length) {
+      own.innerHTML = state.customRecipes.length ? emptyState("chef-hat", t("recipes.preferenceEmpty")) : emptyState("chef-hat", t("recipes.ownEmpty"), t("recipes.addTitle"), "addRecipe");
+      const addOwn = own.querySelector("[data-empty-action='addRecipe']");
+      if (addOwn) addOwn.addEventListener("click", function () { $("ownName").scrollIntoView({ block: "center" }); $("ownName").focus(); });
     } else {
-      own.innerHTML = "<div class='recipeGrid'>" + state.customRecipes.map(function (r) {
-        return "<button class='recipeCard' data-own-recipe='" + r.id + "'>" + mealBadge(r.meal) + "<div class='mealName'>" + esc(r.name) + "</div><div class='pMeta'>" + icon("clock", "iconSm") + " " + t("recipes.cardMeta", { min: r.minutes, n: r.ingredients.length }) + "</div></button>";
+      own.innerHTML = "<div class='recipeGrid'>" + eligibleOwn.map(function (r) {
+        return "<button class='recipeCard' data-own-recipe='" + esc(r.id) + "'>" + mealBadge(r.meal) + "<div class='mealName'>" + esc(r.name) + "</div><div class='pMeta'>" + icon("clock", "iconSm") + " " + t("recipes.cardMeta", { min: r.minutes, n: r.ingredients.length }) + "</div></button>";
       }).join("") + "</div>";
       own.querySelectorAll("[data-own-recipe]").forEach(function (b) { b.addEventListener("click", function () { openRecipe(b.getAttribute("data-own-recipe")); }); });
     }
-    const q = ($("recipeSearch").value || "").toLowerCase();
-    const list = allRecipes().filter(function (r) { return !q || r.name.toLowerCase().indexOf(q) !== -1 || rName(r).toLowerCase().indexOf(q) !== -1 || r.cuisines.join(" ").toLowerCase().indexOf(q) !== -1; });
-    $("recipeList").innerHTML = list.map(function (r) {
-      return "<button class='recipeCard' data-recipe='" + r.id + "'>" + mealBadge(r.meal) + "<div class='mealName'>" + esc(rName(r)) + "</div><div class='pMeta'>" + icon("clock", "iconSm") + " " + t("recipes.cardMeta", { min: r.minutes, n: r.ingredients.length }) + (kcalText(r) ? " · " + kcalText(r) + " " + t("recipe.perServing") : "") + " · " + r.cuisines.map(esc).join(", ") + "</div></button>";
-    }).join("") || emptyState("chef-hat", t("recipes.noMatch"));
+    renderFavorites();
+    renderRecipeIngredientChips();
+    const q = ($("recipeSearch").value || "").trim().toLowerCase();
+    const available = recipeIngredientsNow();
+    const base = eligibleRecipes().filter(function (r) {
+      const searchable = [r.name, rName(r), (r.cuisines || []).join(" "), r.originCountry || "", (r.ingredients || []).map(function (i) { return i.name; }).join(" ")].join(" ").toLowerCase();
+      return !q || searchable.indexOf(q) !== -1;
+    });
+    const ranked = L.rankRecipes(base, Object.assign({}, planCtx(), { matchIngredients: available }), D);
+    const visible = ranked.slice(0, recipeListLimit);
+    $("recipeList").innerHTML = visible.map(function (result) {
+      const r = result.recipe;
+      return "<button class='recipeCard' data-recipe='" + esc(r.id) + "'>" + mealBadge(r.meal) + "<div class='mealName'>" + esc(rName(r)) + "</div><div class='pMeta'>" + icon("clock", "iconSm") + " " + t("recipes.cardMeta", { min: r.minutes, n: r.ingredients.length }) + (kcalText(r) ? " · " + kcalText(r) + " " + t("recipe.perServing") : "") + " · " + (r.cuisines || []).map(esc).join(", ") + "</div>" + recipeMatchLine(result) + "</button>";
+    }).join("") || emptyState("chef-hat", q ? t("recipes.noMatch") : t("recipes.preferenceEmpty"));
+    const remaining = ranked.length - visible.length;
+    if (remaining > 0) $("recipeList").insertAdjacentHTML("beforeend", "<div class='recipeMore'><button type='button' class='pillBtn' id='showMoreRecipes'>" + t("recipes.showMore", { n: Math.min(30, remaining) }) + "</button></div>");
     $("recipeList").querySelectorAll("[data-recipe]").forEach(function (b) { b.addEventListener("click", function () { openRecipe(b.getAttribute("data-recipe")); }); });
+    const more = $("showMoreRecipes");
+    if (more) more.addEventListener("click", function () { recipeListLimit = Math.min(ranked.length, recipeListLimit + 30); renderRecipes(); });
   }
-  $("recipeSearch").addEventListener("input", renderRecipes);
+  function recipeIngredientChoices() {
+    const list = photoFoodChoices();
+    $("recipeIngredientOptions").innerHTML = list.map(function (name) { return "<option value='" + esc(name) + "'>"; }).join("");
+  }
+  function addRecipeIngredient() {
+    const field = $("recipeIngredientInput");
+    const name = String(field.value || "").trim().slice(0, 80);
+    if (!name) { field.focus(); return; }
+    const values = recipeIngredientsNow();
+    if (!values.some(function (item) { return item.toLowerCase() === name.toLowerCase(); })) values.push(name);
+    state.recipeIngredients = values; state.recipeIngredientsManual = true; field.value = "";
+    save(); renderRecipes(); field.focus();
+  }
+  $("recipeIngredientAdd").addEventListener("click", addRecipeIngredient);
+  $("recipeIngredientInput").addEventListener("keydown", function (event) { if (event.key === "Enter") { event.preventDefault(); addRecipeIngredient(); } });
+  $("recipeUseGroceries").addEventListener("click", function () {
+    state.recipeIngredients = []; state.recipeIngredientsManual = false; save(); renderRecipes();
+  });
+  recipeIngredientChoices();
+  $("recipeSearch").addEventListener("input", function () { recipeListLimit = 30; renderRecipes(); });
   /* Add your recipe: two ways. My own recipe shows the full form. Just the name fetches a recipe for approval first. */
   function setAddMode(mode) {
     document.querySelectorAll("#addModeSwitch .seg").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-addmode") === mode); });
@@ -871,11 +1216,17 @@
     let name = $("nameMealInput").value.trim(); if (!name) { toast(t("toast.typeMealName")); return; }
     name = name.charAt(0).toUpperCase() + name.slice(1);
     const r = L.makeRecipeFromName(name, D, state.customRecipes);
+    if (!r) {
+      $("nameMealResult").innerHTML = "<p class='hint'>" + t("recipes.noSuggestedMatch") + "</p><div class='row'><button class='primaryBtn' id='nameMealUseOwn'>" + t("recipes.addOwnInstead") + "</button></div>";
+      $("nameMealUseOwn").addEventListener("click", function () { setAddMode("own"); $("ownName").value = name; $("ownName").focus(); });
+      return;
+    }
+    if (!L.recipeAllowed(r, planCtx(), D)) { $("nameMealResult").innerHTML = "<p class='hint'>" + t("recipe.notSuitable") + "</p>"; return; }
     const isNew = !recipeById(r.id);
     const preview = "<div class='adaptBox'><div class='row' style='justify-content:space-between'><span>" + mealBadge(r.meal) + "</span><span class='pMeta'>" + t("recipe.metaLine", { min: r.minutes, n: r.servings }) + "</span></div>" +
       "<h3 style='margin-top:6px'>" + esc(rName(r)) + "</h3>" +
       "<p class='hint'>" + r.cuisines.map(esc).join(", ") + "</p>" +
-      "<h3>" + t("recipe.ingredients") + "</h3><ul class='ingList'>" + r.ingredients.map(function (i, ix) { return "<li>" + esc(i.qty) + " " + esc(i.unit) + " " + esc(rIngName(r, ix)) + "</li>"; }).join("") + "</ul>" +
+      "<h3>" + t("recipe.ingredients") + "</h3><ul class='ingList'>" + r.ingredients.map(function (i, ix) { return "<li>" + rIngLine(r, i, ix) + "</li>"; }).join("") + "</ul>" +
       "<h3>" + t("recipe.howTo") + "</h3><ol class='stepsList'>" + rSteps(r).map(function (s2) { return "<li>" + esc(s2) + "</li>"; }).join("") + "</ol></div>";
     if (!isNew) {
       $("nameMealResult").innerHTML = "<p class='hint'>" + t("recipes.matchLine") + "</p>" + preview +
@@ -901,7 +1252,7 @@
   openRecipe = function (id) {
     if (window._pendingMeal && window._pendingMeal.id === id) {
       const r = window._pendingMeal;
-      $("recipeModalCard").innerHTML = "<div class='row' style='justify-content:space-between'><span>" + mealBadge(r.meal) + "</span><button class='roundBtn' id='closeRecipe' aria-label='" + t("common.close") + "'>" + icon("x") + "</button></div><h2>" + esc(rName(r)) + "</h2><p class='hint'>" + t("recipe.metaLine", { min: r.minutes, n: r.servings }) + "</p><h3>" + t("recipe.ingredients") + "</h3><ul class='ingList'>" + r.ingredients.map(function (i, ix) { return "<li>" + esc(i.qty) + " " + esc(i.unit) + " " + esc(rIngName(r, ix)) + "</li>"; }).join("") + "</ul><h3>" + t("recipe.howTo") + "</h3><ol class='stepsList'>" + rSteps(r).map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol><div class='row'><button class='pillBtn' id='closeRecipe2'>" + t("common.close") + "</button></div>";
+      $("recipeModalCard").innerHTML = "<div class='row' style='justify-content:space-between'><span>" + mealBadge(r.meal) + "</span><button class='roundBtn' id='closeRecipe' aria-label='" + t("common.close") + "'>" + icon("x") + "</button></div><h2>" + esc(rName(r)) + "</h2><p class='hint'>" + t("recipe.metaLine", { min: r.minutes, n: r.servings }) + "</p><h3>" + t("recipe.ingredients") + "</h3><ul class='ingList'>" + r.ingredients.map(function (i, ix) { return "<li>" + rIngLine(r, i, ix) + "</li>"; }).join("") + "</ul><h3>" + t("recipe.howTo") + "</h3><ol class='stepsList'>" + rSteps(r).map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol><div class='row'><button class='pillBtn' id='closeRecipe2'>" + t("common.close") + "</button></div>";
       $("recipeModal").classList.remove("hidden");
       const close = function () { $("recipeModal").classList.add("hidden"); };
       $("closeRecipe").addEventListener("click", close); $("closeRecipe2").addEventListener("click", close);
@@ -909,6 +1260,82 @@
     }
     origOpen(id);
   };
+  /* Save a recipe from anywhere (29 Oct, item 4): three doors, and
+     every door lands on this same form, which is the check screen.
+     The link door reads the page directly inside the app shell,
+     where the platform fetch can reach it; on the open web, where a
+     site may refuse to be read, the door says so plainly and opens
+     the paste door instead of failing quietly. */
+  function fillOwnForm(rec) {
+    $("ownName").value = rec.name || "";
+    if (rec.minutes) $("ownMinutes").value = rec.minutes;
+    if (rec.servings) $("ownServings").value = rec.servings;
+    $("ownCuisine").value = rec.cuisine || "";
+    $("ownIngredients").value = (rec.ingredientLines || []).join("\n");
+    $("ownSteps").value = (rec.stepLines || []).join("\n");
+    $("ownMsg").textContent = t("import.checkThenSave");
+    $("ownWrap").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  async function fetchRecipePage(url) {
+    const cap = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp;
+    if (cap) { const res = await cap.get({ url: url }); return typeof res.data === "string" ? res.data : ""; }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("unreadable");
+    return await res.text();
+  }
+  $("importLinkBtn").addEventListener("click", function () { $("importLinkRow").classList.toggle("hidden"); $("importPasteRow").classList.add("hidden"); });
+  $("importPasteBtn").addEventListener("click", function () { $("importPasteRow").classList.toggle("hidden"); $("importLinkRow").classList.add("hidden"); });
+  $("importFileBtn").addEventListener("click", function () { $("importRecipeFile").click(); });
+  $("importUrlGo").addEventListener("click", async function () {
+    const url = $("importUrlInput").value.trim();
+    if (!/^https?:\/\//i.test(url)) { $("ownMsg").textContent = t("import.linkFailed"); return; }
+    $("ownMsg").textContent = t("import.reading");
+    try {
+      const mod = await import("./recipe-import.js");
+      const html = await fetchRecipePage(url);
+      const rec = mod.recipeFromJsonLd(html);
+      if (rec) { fillOwnForm(rec); $("importLinkRow").classList.add("hidden"); }
+      else { $("ownMsg").textContent = t("import.linkFailed"); $("importLinkRow").classList.add("hidden"); $("importPasteRow").classList.remove("hidden"); }
+    } catch (e) {
+      $("ownMsg").textContent = t("import.linkFailed");
+      $("importLinkRow").classList.add("hidden");
+      $("importPasteRow").classList.remove("hidden");
+    }
+  });
+  $("importPasteGo").addEventListener("click", async function () {
+    const mod = await import("./recipe-import.js");
+    const rec = mod.recipeFromText($("importPasteText").value);
+    if (rec) { fillOwnForm(rec); $("importPasteRow").classList.add("hidden"); }
+    else $("ownMsg").textContent = t("import.pasteFailed");
+  });
+  $("importRecipeFile").addEventListener("change", async function () {
+    const file = $("importRecipeFile").files && $("importRecipeFile").files[0];
+    $("importRecipeFile").value = "";
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (parsed && Array.isArray(parsed.customRecipes)) {
+        /* The check screen law (b32 cure, QA F-MP32-3): a file never
+           adds recipes behind the form's back, and never doubles one
+           already in the book. The file's new recipes queue behind
+           the form one at a time: this pick fills the form with the
+           first new one; saving it makes the next pick offer the
+           next, because the saved ones are now filtered out. */
+        const owned = {}; state.customRecipes.forEach(function (r) { owned[String(r.name || "").trim().toLowerCase()] = true; });
+        const fresh = parsed.customRecipes.filter(function (rec) { return rec && typeof rec.name === "string" && rec.name.trim() && Array.isArray(rec.ingredients) && Array.isArray(rec.steps) && !owned[rec.name.trim().toLowerCase()]; });
+        if (!fresh.length) { toast(t("import.fileAllOld")); return; }
+        const rec0 = fresh[0];
+        fillOwnForm({ name: rec0.name, minutes: rec0.minutes || 30, servings: rec0.servings || 2, cuisine: Array.isArray(rec0.cuisines) ? rec0.cuisines[0] : "", ingredientLines: rec0.ingredients.map(function (i) { return typeof i === "string" ? i : [i.qty, i.unit, i.name].filter(function (x) { return x !== null && x !== undefined && x !== ""; }).join(" "); }), stepLines: rec0.steps.map(String) });
+        if (fresh.length > 1) toast(t("import.fileOne", { n: fresh.length }));
+        return;
+      }
+      if (parsed && Array.isArray(parsed.ingredients) && Array.isArray(parsed.steps)) {
+        fillOwnForm({ name: parsed.name || "", minutes: parsed.minutes || 30, servings: parsed.servings || 2, cuisine: Array.isArray(parsed.cuisines) ? parsed.cuisines[0] : "", ingredientLines: parsed.ingredients.map(function (i) { return typeof i === "string" ? i : [i.qty, i.unit, i.name].filter(function (x) { return x !== null && x !== undefined && x !== ""; }).join(" "); }), stepLines: parsed.steps.map(String) });
+        return;
+      }
+      $("ownMsg").textContent = t("import.fileFailed");
+    } catch (e) { $("ownMsg").textContent = t("import.fileFailed"); }
+  });
   $("ownSave").addEventListener("click", function () {
     const name = $("ownName").value.trim();
     if (!name) { $("ownMsg").textContent = t("recipes.needName"); return; }
@@ -925,7 +1352,7 @@
        the person's number behind their back. */
     const mins = Number($("ownMinutes").value);
     if (!(mins >= 1)) { $("ownMsg").textContent = t("recipes.needMinutes"); return; }
-    state.customRecipes.push({ id: "own." + Date.now(), name: name, meal: $("ownMeal").value, cuisines: [cuisine], minutes: mins, servings: 2, ingredients: ings, steps: steps, custom: true });
+    state.customRecipes.push({ id: "own." + Date.now(), name: name, meal: $("ownMeal").value, cuisines: [cuisine], minutes: mins, servings: L.cleanServings($("ownServings").value), ingredients: ings, steps: steps, custom: true });
     save(); $("ownMsg").textContent = t("recipes.ownSaved");
     $("ownName").value = ""; $("ownIngredients").value = ""; $("ownSteps").value = "";
     renderRecipes();
@@ -951,7 +1378,7 @@
     if ($("gQty").value !== "" && !(Number($("gQty").value) > 0)) { toast(t("groc.needAmount")); return; }
     const addedVal = $("gAdded").value;
     const added = addedVal ? addedVal.replace(/-/g, ".") : todayKey();
-    state.pantry.push({ id: "g" + Date.now(), name: name, qty: $("gQty").value === "" ? 1 : Math.max(0, Number($("gQty").value) || 0), unit: $("gUnit").value, storage: $("gStorage").value, added: added, shelfDays: L.shelfDays(name, $("gStorage").value, D) });
+    state.pantry.push({ id: "g" + Date.now(), name: name, qty: $("gQty").value === "" ? 1 : Math.max(0, Number($("gQty").value) || 0), unit: $("gUnit").value, storage: $("gStorage").value, added: added, shelfDays: L.shelfKnown(name, D) ? L.shelfDays(name, $("gStorage").value, D) : undefined });
     save(); $("gName").value = ""; renderGroceries(); renderSide(); toast(t("toast.groceryAdded"));
   });
   function renderGroceries() {
@@ -960,7 +1387,8 @@
       const dl = L.daysLeft(i, new Date());
       const status = dl < 0 ? "<span class='useFirst'>" + icon("triangle-alert", "iconSm") + " " + t("legal.pastBest") + "</span>" : dl === 0 ? "<span class='useFirst'>" + icon("triangle-alert", "iconSm") + " " + t("groc.statusUseToday") + "</span>" : dl <= 2 ? "<span class='useFirst'>" + icon("triangle-alert", "iconSm") + " " + t(dl === 1 ? "groc.useFirst1" : "groc.useFirstN", { n: dl }) + "</span>" : dl <= 5 ? "<span class='useSoon'>" + t("groc.statusUseSoon", { n: dl }) + "</span>" : "<span class='fresh'>" + t("groc.statusFresh", { n: dl }) + "</span>";
       const exp = L.expiryFor(i);
-      return "<div class='pantryRow'><div><div class='pName'>" + esc(i.name) + "</div><div class='pMeta'>" + esc(i.qty) + " " + esc(i.unit) + " · " + storagePlace(i.storage) + " · " + t("groc.bestUntil") + " " + fullDate(exp) + "<br>" + status + "</div></div><button class='miniBtn' data-remove-pantry='" + i.id + "'>" + icon("trash-2", "iconSm") + " " + t("common.remove") + "</button></div>";
+      const dateKnown = typeof i.shelfDays === "number" || L.shelfKnown(i.name, D);
+      return "<div class='pantryRow'><div><div class='pName'>" + esc(i.name) + "</div><div class='pMeta'>" + esc(i.qty) + " " + esc(i.unit) + " · " + storagePlace(i.storage) + " · " + (dateKnown ? t("groc.bestUntil") + " " + fullDate(exp) : t("groc.noGuideDate")) + (dateKnown ? "<br>" + status : "") + "</div></div><button class='miniBtn' data-remove-pantry='" + i.id + "'>" + icon("trash-2", "iconSm") + " " + t("common.remove") + "</button></div>";
     }).join("") || emptyState("refrigerator", t("groc.empty"), t("groc.addGroceryBtn"), "addGrocery");
     const gBtn = $("pantryList").querySelector("[data-empty-action='addGrocery']");
     if (gBtn) gBtn.addEventListener("click", function () { $("gName").scrollIntoView({ block: "center" }); $("gName").focus(); });
@@ -991,19 +1419,56 @@
     reader.onload = function () { photoDataUrl = String(reader.result); $("photoPreview").innerHTML = "<img class='photoImg' alt='" + t("photo.altFridge") + "' src='" + photoDataUrl + "'>"; };
     reader.readAsDataURL(f);
   });
-  function detectRow(name) {
-    return "<div class='detectRow'><strong>" + esc(name) + "</strong><input type='number' min='0' step='any' value='200' data-dqty aria-label='" + t("groc.amount") + "'><select data-dunit><option>g</option><option>pcs</option><option>ml</option><option>kg</option></select><button class='miniBtn' data-dadd='" + esc(name) + "'>" + icon("plus", "iconSm") + " " + t("photo.addToGroceries") + "</button></div>";
+  function photoFoodChoices() {
+    const names = D.FRIDGE_COMMON.slice();
+    allRecipes().forEach(function (recipe) {
+      (recipe.ingredients || []).forEach(function (ingredient) { if (ingredient && ingredient.name) names.push(ingredient.name); });
+    });
+    state.pantry.forEach(function (item) { if (item && item.name) names.push(item.name); });
+    const seen = Object.create(null);
+    return names.map(function (name) { return String(name || "").trim(); }).filter(function (name) {
+      const key = name.toLowerCase();
+      if (!key || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+  function photoFoodOptions() {
+    return "<datalist id='photoFoodOptions'>" + photoFoodChoices().map(function (name) { return "<option value='" + esc(name) + "'>"; }).join("") + "</datalist>";
+  }
+  function photoManualEntry() {
+    return "<div class='photoManualEntry'><label class='photoManualField'><span>" + t("photo.manualLabel") + "</span><input id='photoManualName' type='text' maxlength='80' list='photoFoodOptions' autocomplete='off' placeholder='" + t("photo.manualPlaceholder") + "'></label><button type='button' class='miniBtn' data-photo-manual>" + icon("plus", "iconSm") + " " + t("photo.manualAdd") + "</button><p class='hint'>" + t("photo.manualHint") + "</p></div>" + photoFoodOptions();
+  }
+  function foodDefault(name) {
+    const n = String(name || "").toLowerCase();
+    const pcs = ["egg", "apple", "orange", "lemon", "lime", "avocado", "banana", "onion", "carrot", "tomato", "capsicum", "cucumber", "zucchini", "garlic", "lettuce", "cabbage", "sausage", "potato", "pumpkin", "pizza", "donut", "cake"];
+    const ml = ["milk", "juice", "cream", "soy sauce"];
+    if (ml.some(function (k) { return n.indexOf(k) !== -1; })) return { qty: 500, unit: "ml" };
+    if (pcs.some(function (k) { return n.indexOf(k) !== -1; })) return { qty: n.indexOf("egg") !== -1 ? 6 : 2, unit: "pcs" };
+    return { qty: 200, unit: "g" };
+  }
+  function detectRow(name, confidence) {
+    const fd = foodDefault(name);
+    const confidenceHtml = typeof confidence === "number" && isFinite(confidence) ? "<p class='hint photoConfidence'>" + t(confidence < 0.5 ? "photo.confidenceLow" : "photo.confidence", { pct: Math.round(confidence * 100) }) + "</p>" : "";
+    return "<div class='detectRow'><label class='detectFoodField'><span>" + t("photo.confirmName") + "</span><input type='text' maxlength='80' list='photoFoodOptions' value='" + esc(name) + "' data-dname autocomplete='off'></label><p class='hint photoShelf'>" + t("photo.lasts", { n: L.shelfDays(name, "fridge", D) }) + "</p><input type='number' min='0' step='any' value='" + fd.qty + "' data-dqty aria-label='" + t("groc.amount") + "'><select data-dunit aria-label='" + t("groc.unit") + "'>" + ["g", "pcs", "ml", "kg"].map(function (u) { return "<option" + (u === fd.unit ? " selected" : "") + ">" + u + "</option>"; }).join("") + "</select><button type='button' class='miniBtn' data-dadd>" + icon("plus", "iconSm") + " " + t("photo.addToGroceries") + "</button>" + confidenceHtml + "</div>";
   }
   function bindDetectRows() {
     $("photoResults").querySelectorAll("[data-dadd]").forEach(function (b) {
       if (b.dataset.bound) return; b.dataset.bound = "1";
       b.addEventListener("click", function () {
         const row = b.parentElement;
-        const name = b.getAttribute("data-dadd").toLowerCase();
-        /* Issue 9a: the same zero amount refusal as the grocery form. */
-        if (row.querySelector("[data-dqty]").value !== "" && !(Number(row.querySelector("[data-dqty]").value) > 0)) { toast(t("groc.needAmount")); return; }
-        state.pantry.push({ id: "g" + Date.now() + Math.floor(Math.random() * 999), name: name, qty: row.querySelector("[data-dqty]").value === "" ? 1 : Math.max(0, Number(row.querySelector("[data-dqty]").value) || 0), unit: row.querySelector("[data-dunit]").value, storage: "fridge", added: todayKey(), shelfDays: L.shelfDays(name, "fridge", D) });
-        save(); b.textContent = t("photo.added"); b.disabled = true; renderSide(); toast(t("toast.itemAddedToGroceries", { name: name }));
+        const nameField = row.querySelector("[data-dname]");
+        const name = nameField ? nameField.value.trim() : "";
+        if (!name) { toast(t("photo.nameRequired")); if (nameField) nameField.focus(); return; }
+        if (name.length > 80) { toast(t("photo.nameTooLong")); if (nameField) nameField.focus(); return; }
+        const qtyField = row.querySelector("[data-dqty]");
+        const qty = Number(qtyField.value);
+        if (qtyField.value === "" || !isFinite(qty) || qty <= 0) { toast(t("groc.needAmount")); qtyField.focus(); return; }
+        const unit = row.querySelector("[data-dunit]").value;
+        const existing = state.pantry.find(function (item) { return item.name.trim().toLowerCase() === name.toLowerCase() && item.unit === unit && item.storage === "fridge"; });
+        if (existing) existing.qty = Number(existing.qty || 0) + qty;
+        else state.pantry.push({ id: "g" + Date.now() + Math.floor(Math.random() * 999), name: name, qty: qty, unit: unit, storage: "fridge", added: todayKey(), shelfDays: L.shelfKnown(name, D) ? L.shelfDays(name, "fridge", D) : undefined });
+        save(); b.textContent = t("photo.added"); b.disabled = true; renderGroceries(); renderSide(); toast(t("toast.itemAddedToGroceries", { name: name }) + " " + t("photo.lasts", { n: L.shelfDays(name, "fridge", D) }));
       });
     });
     $("photoResults").querySelectorAll("[data-common]").forEach(function (b) {
@@ -1012,14 +1477,32 @@
         $("photoResults").insertAdjacentHTML("beforeend", detectRow(b.getAttribute("data-common"))); bindDetectRows();
       });
     });
+    const manual = $("photoResults").querySelector("[data-photo-manual]");
+    if (manual && !manual.dataset.bound) {
+      manual.dataset.bound = "1";
+      manual.addEventListener("click", function () {
+        const field = $("photoManualName");
+        const name = field.value.trim();
+        if (!name) { toast(t("photo.nameRequired")); field.focus(); return; }
+        if (name.length > 80) { toast(t("photo.nameTooLong")); field.focus(); return; }
+        $("photoResults").insertAdjacentHTML("beforeend", detectRow(name));
+        field.value = "";
+        bindDetectRows();
+        const rows = $("photoResults").querySelectorAll("[data-dname]");
+        if (rows.length) rows[rows.length - 1].focus();
+      });
+    }
   }
   function loadScript(src) { return new Promise(function (res, rej) { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
   $("photoScan").addEventListener("click", async function () {
     if (!photoDataUrl) { toast(t("toast.addPhotoFirst")); return; }
-    /* Fridge photo help is a Plus extra (v32 trigger: photo). */
-    if (plusGate("photo")) return;
+    /* Everyone gets one on-device scan before the Plus gate. The flag
+       is saved only after model.detect resolves, so a load/error does
+       not consume the try. */
+    if (!plusActive() && state.photoTrialUsed) { plusGate("photo"); return; }
     $("photoResults").innerHTML = "<p class='hint'>" + t("photo.looking") + "</p>";
-    const found = [];
+    const foundByName = Object.create(null);
+    let modelCompleted = false;
     try {
       /* U8 (app v49): the model load races a 30 second bound. A
          load that never settles used to hold the looking line
@@ -1027,21 +1510,24 @@
          failed load has always taken, and the tap to confirm
          fallback below lands exactly as it does for a refusal. */
       await window.MP_WAIT.bound((async function () {
-        if (!window.cocoSsd) {
-          await loadScript("vendor/tf.min.js");
-          await loadScript("vendor/coco-ssd.min.js");
-        }
-        const model = await cocoSsd.load({ modelUrl: "vendor/model/model.json" });
+        const eye = await import("./food-eye.js");
         const img = $("photoPreview").querySelector("img");
-        const preds = await model.detect(img);
-        const map = { apple: "apple", banana: "banana", orange: "orange", broccoli: "broccoli", carrot: "carrot", pizza: "pizza", cake: "cake", sandwich: "sandwich", donut: "donut" };
-        preds.forEach(function (p) { if (map[p.class] && found.indexOf(map[p.class]) === -1) found.push(map[p.class]); });
-      })(), 30000);
+        const ranked = await eye.findFoods(img.src, function (p) {
+          if (p && p.status === "progress" && p.total > 1e6) $("photoResults").innerHTML = "<p class='hint'>" + t("photo.downloading", { pct: Math.round(p.loaded / p.total * 100) }) + "</p>";
+        });
+        modelCompleted = true;
+        ranked.forEach(function (r) { foundByName[r.name] = { name: r.name, score: undefined, rank: r.rank }; });
+      })(), 180000);
     } catch (e) { /* local model could not load: fall back to tap to confirm list */ }
+    if (modelCompleted && !plusActive() && !state.photoTrialUsed) { state.photoTrialUsed = true; save(); }
+    const found = Object.keys(foundByName).map(function (key) { return foundByName[key]; }).sort(function (a, b) { return a.rank - b.rank; });
+    const sure = found.slice(0, 6), maybe = found.slice(6);
     let html = "";
-    if (found.length) html += "<h3>" + t("photo.foundTitle") + "</h3><p class='hint'>" + t("photo.foundHint") + "</p>" + found.map(detectRow).join("");
+    if (sure.length) html += "<h3>" + t("photo.foundTitle") + "</h3><p class='hint'>" + t("photo.foundHint") + "</p>" + sure.map(function (item) { return detectRow(item.name); }).join("");
     else html += "<h3>" + t("photo.tapTitle") + "</h3><p class='hint'>" + t("photo.tapHint") + "</p>";
-    html += "<div class='chipRow'>" + D.FRIDGE_COMMON.map(function (c) { return "<button class='chip' data-common='" + esc(c) + "'>" + esc(c) + "</button>"; }).join("") + "</div>";
+    if (maybe.length) html += "<h3>" + t("photo.maybeTitle") + "</h3><div class='chipRow'>" + maybe.map(function (c) { return "<button class='chip' data-common='" + esc(c.name) + "'>" + esc(listIngName(c.name)) + "</button>"; }).join("") + "</div>";
+    html += photoManualEntry();
+    html += "<div class='chipRow'>" + D.FRIDGE_COMMON.map(function (c) { return "<button class='chip' data-common='" + esc(c) + "'>" + esc(listIngName(c)) + "</button>"; }).join("") + "</div>";
     $("photoResults").innerHTML = html;
     bindDetectRows();
   });
@@ -1099,13 +1585,17 @@
   });
 
   /* Grocery list view */
+  function groceryAmount(i) {
+    return i && i.unit === "to taste" ? esc(t("recipes.toTaste")) : esc(i && i.qty) + " " + esc(i && i.unit);
+  }
   function renderList() {
     const start = todayKey(); ensureRange(start, 7);
     const sub = {}; for (let i = 0; i < 7; i++) { const d = L.parseKey(start); d.setDate(d.getDate() + i); sub[L.dateKey(d)] = state.plan[L.dateKey(d)]; }
-    /* Pantry covered items come off the buy list whole (the ruling
-       of 18 Oct, build 8) and wait in the at home set; a put back choice in
-       state.atHomeBack returns one to the buy list with its amount. */
-    const built = L.buildGroceryList(sub, allRecipes(), state.pantry, state.atHomeBack);
+    /* Pantry covered items come off the buy list (the ruling of
+       18 Oct, build 8; amounts from 29 Oct, item 9) and wait in the
+       at home set; a put back choice in state.atHomeBack returns one
+       to the buy list with its full planned amount. */
+    const built = L.buildGroceryList(sub, recipesForServingCount(), state.pantry, state.atHomeBack);
     const auto = built.buy.filter(function (i) { return !state.hiddenItems[i.name + "|" + i.unit]; });
     const atHome = built.atHome;
     const groups = {};
@@ -1124,7 +1614,9 @@
     } else Object.keys(groups).sort().forEach(function (cat) {
       html += "<div class='groupTitle'>" + esc(cat) + "</div>" + groups[cat].map(function (i) {
         const key = i.name + "|" + i.unit; const done = !!state.doneItems[key];
-        return "<div class='shopRow'><label style='display:flex;gap:10px;align-items:center;margin:0'><input type='checkbox' data-done='" + esc(key) + "'" + (done ? " checked" : "") + "><span><span class='pName'" + (done ? " style='text-decoration:line-through'" : "") + ">" + esc(listIngName(i.name)) + "</span><span class='pMeta'> " + esc(i.qty) + " " + esc(i.unit) + (i.haveIt ? " · <span class='fresh'>" + t("list.youHaveThis") + "</span>" : "") + "</span></span></label><button class='miniBtn' data-hide-item='" + esc(key) + "'>" + icon("trash-2", "iconSm") + " " + t("common.remove") + "</button></div>";
+        const haveNote = i.haveQty ? " · <span class='fresh'>" + t("list.youHaveAmount", { qty: i.haveQty, unit: i.unit }) + "</span>" : (i.haveIt ? " · <span class='fresh'>" + t("list.youHaveThis") + "</span>" : "");
+        const forLine = i.forRecipes && i.forRecipes.length ? "<span class='pMeta' style='display:block'>" + t("list.forRecipes", { names: i.forRecipes.map(function (n, ix) { const rr = i.forRecipeIds && recipeById(i.forRecipeIds[ix]); return rr ? rName(rr) : n; }).join(", ") }) + "</span>" : "";
+        return "<div class='shopRow'><label style='display:flex;gap:10px;align-items:center;margin:0'><input type='checkbox' data-done='" + esc(key) + "'" + (done ? " checked" : "") + "><span><span class='pName'" + (done ? " style='text-decoration:line-through'" : "") + ">" + esc(listIngName(i.name)) + "</span><span class='pMeta'> " + groceryAmount(i) + haveNote + "</span>" + forLine + "</span></label><button class='miniBtn' data-hide-item='" + esc(key) + "'>" + icon("trash-2", "iconSm") + " " + t("common.remove") + "</button></div>";
       }).join("");
     });
     /* Grocery List empty state (design section 3A): nothing planned and
@@ -1145,7 +1637,7 @@
     if (plusActive() && atHome.length) {
       html += "<div class='groupTitle'>" + t("list.atHomeTitle") + "</div>" + atHome.map(function (i) {
         const key = i.name + "|" + i.unit;
-        return "<div class='shopRow'><div><span class='pName'>" + esc(listIngName(i.name)) + "</span><span class='pMeta'> " + esc(i.qty) + " " + esc(i.unit) + "</span></div><button class='miniBtn' data-athome-back='" + esc(key) + "'>" + t("list.putBack") + "</button></div>";
+        return "<div class='shopRow'><div><span class='pName'>" + esc(listIngName(i.name)) + "</span><span class='pMeta'> " + groceryAmount(i) + "</span></div><button class='miniBtn' data-athome-back='" + esc(key) + "'>" + t("list.putBack") + "</button></div>";
       }).join("");
     }
     $("shopList").innerHTML = html;
@@ -1251,6 +1743,27 @@
         save(); renderPrefs();
       });
     });
+    $("recipeDiet").value = state.diet;
+    $("maxCookMinutes").value = String(state.maxCookMinutes);
+    $("defaultServings").value = String(state.defaultServings);
+    /* Busy nights (29 Oct, item 6): weekday chips save the moment
+       they are tapped, like the cuisine chips above. Day names come
+       from the phone's own calendar words, so both languages are
+       right without extra strings. 25 Oct 2026 was a Sunday. */
+    $("busyChips").innerHTML = [0, 1, 2, 3, 4, 5, 6].map(function (wd) {
+      const label = new Date(2026, 9, 25 + wd).toLocaleDateString(LANG.locale(), { weekday: "short" });
+      return "<button class='chip" + (state.busyNights.indexOf(wd) !== -1 ? " on" : "") + "' data-busy='" + wd + "'>" + esc(label) + "</button>";
+    }).join("");
+    $("busyChips").querySelectorAll("[data-busy]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const wd = Number(b.getAttribute("data-busy"));
+        const i = state.busyNights.indexOf(wd);
+        if (i === -1) state.busyNights.push(wd); else state.busyNights.splice(i, 1);
+        state.busyNights = L.cleanBusyNights(state.busyNights);
+        save(); renderPrefs();
+      });
+    });
+    $("quickMinutes").value = String(state.quickMinutes);
     $("eatBreakfast").value = state.eatTimes.breakfast;
     $("eatLunch").value = state.eatTimes.lunch;
     $("eatDinner").value = state.eatTimes.dinner;
@@ -1292,18 +1805,11 @@
       s.language = pick;
       save();
       LANG.setChoice(pick);
-      /* The reload waits for the save's push (app v61,
-         F-B23-2): the push rides a 2 s debounce and the old
-         same-tick reload tore the page down before the timer
-         fired, so the pick never reached the server and the
-         next landing adopted "auto" back over it. The hook's
-         flush runs that push now and the reload follows its
-         settle (the flush is bounded, so a wedged store
-         cannot hold the page); with no hook installed the
-         reload fires at once, exactly as before. */
-      var hook = window.MP_ACCOUNT_HOOK;
-      if (hook && hook.flushPush) hook.flushPush().then(function () { location.reload(); }, function () { location.reload(); });
-      else location.reload();
+      /* The reload waits for both the local copy and the account
+         push. The normal save is debounced for 500 ms; this flush
+         keeps a language change from being lost to its own reload.
+         With accounts dormant, the local copy still flushes first. */
+      flushPendingSave().then(function () { location.reload(); }, function () { location.reload(); });
     });
   });
 
@@ -1401,6 +1907,10 @@
     });
   });
   $("prefsSave").addEventListener("click", function () {
+    state.diet = L.cleanDiet($("recipeDiet").value);
+    state.maxCookMinutes = L.cleanCookMinutes($("maxCookMinutes").value);
+    state.defaultServings = L.cleanServings($("defaultServings").value);
+    state.quickMinutes = L.cleanQuickMinutes($("quickMinutes").value);
     state.eatTimes = { breakfast: $("eatBreakfast").value || "07:30", lunch: $("eatLunch").value || "12:30", dinner: $("eatDinner").value || "18:30" };
     state.setupMinutes = Math.max(0, Number($("setupMinutes").value) || 5);
     state.extraReminders = { breakfast: Math.min(240, Math.max(0, Math.floor(Number($("alsoBreakfast").value) || 0))), lunch: Math.min(240, Math.max(0, Math.floor(Number($("alsoLunch").value) || 0))), dinner: Math.min(240, Math.max(0, Math.floor(Number($("alsoDinner").value) || 0))) };
@@ -1434,6 +1944,23 @@
   $("exportBtn").addEventListener("click", function () {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "meal-prep-data.json"; a.click();
+  });
+  /* Send this list (29 Oct, item 10, the part that fits the Multi
+     User Law): the list leaves as a plain copy the person sends
+     themselves. Nothing is shared live and no other account can see
+     this data; the household gets words, not access. Unticked buy
+     items and hand added extras only. */
+  $("sendListBtn").addEventListener("click", async function () {
+    const start = todayKey(); ensureRange(start, 7);
+    const sub = {}; for (let i = 0; i < 7; i++) { const d = L.parseKey(start); d.setDate(d.getDate() + i); sub[L.dateKey(d)] = state.plan[L.dateKey(d)]; }
+    const built = L.buildGroceryList(sub, recipesForServingCount(), state.pantry, state.atHomeBack);
+    const lines = [t("list.sendTitle")];
+    built.buy.filter(function (i) { return !state.hiddenItems[i.name + "|" + i.unit] && !state.doneItems[i.name + "|" + i.unit]; }).forEach(function (i) { lines.push("• " + listIngName(i.name) + " " + (i.unit === "to taste" ? t("recipes.toTaste") : i.qty + " " + i.unit)); });
+    state.extras.forEach(function (x) { lines.push("• " + x.name + " " + x.qty + " " + x.unit); });
+    const text = lines.join("\n");
+    if (navigator.share) { try { await navigator.share({ title: t("list.sendTitle"), text: text }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+    try { await navigator.clipboard.writeText(text); toast(t("toast.listCopied")); }
+    catch (e) { toast(t("toast.listCopyFailed")); }
   });
 
   /* Reminders and notifications */
@@ -1514,6 +2041,10 @@
         ensureRange(todayKey(), 7);
         const now = new Date();
         const list = [];
+        L.expirySchedule(state, D, now, 7).forEach(function (e) {
+          if (e.at <= now) return;
+          list.push({ id: e.id, title: t("notif.expiryTitle"), body: t("notif.expiryBody", { name: e.name, date: L.parseKey(e.expiryKey).toLocaleDateString(LANG.locale(), { weekday: "long", day: "numeric", month: "long" }) }), schedule: { at: e.at, allowWhileIdle: true }, extra: { key: e.key, kind: "expiry" } });
+        });
         L.reminderSchedule(state, D, new Date(), 7).forEach(function (e) {
           if (e.at <= now) return;
           const r = recipeById(e.recipeId); if (!r) return;
@@ -1790,7 +2321,7 @@
       renderGuideCuisines();
     } else if (step === 4) {
       card.innerHTML = guideShell(GUIDE_POSES[4], GUIDE_BUBBLES[4], t("tour.tableLine"),
-        "<div class='guideForm'><label>" + t("fam.name") + "<input id='gPName' type='text' placeholder='Jamie'></label>" +
+        "<div class='guideForm'><label>" + t("fam.name") + "<input id='gPName' type='text'></label>" +
         "<div><span class='fieldLabel'>" + t("fam.colour") + "</span><div id='gPColorChips' class='colorChips'></div></div>" +
         "<label>" + t("tour.tagsLabel") + "<input id='gPTags' type='text' placeholder='" + t("tour.tagsPh") + "'></label>" +
         "<label>" + t("tour.dislikesLabel") + "<input id='gPDislikes' type='text' placeholder='" + t("tour.dislikesPh") + "'></label>" +
@@ -1819,7 +2350,7 @@
         const name = $("gGName").value.trim().toLowerCase(); if (!name) { $("gGMsg").textContent = " " + t("toast.typeFoodName"); return; }
         /* Issue 9a: the same zero amount refusal as the grocery form. */
         if ($("gGQty").value !== "" && !(Number($("gGQty").value) > 0)) { $("gGMsg").textContent = " " + t("groc.needAmount"); return; }
-        state.pantry.push({ id: "g" + Date.now(), name: name, qty: $("gGQty").value === "" ? 1 : Math.max(0, Number($("gGQty").value) || 0), unit: $("gGUnit").value, storage: $("gGStorage").value, added: todayKey(), shelfDays: L.shelfDays(name, $("gGStorage").value, D) });
+        state.pantry.push({ id: "g" + Date.now(), name: name, qty: $("gGQty").value === "" ? 1 : Math.max(0, Number($("gGQty").value) || 0), unit: $("gGUnit").value, storage: $("gGStorage").value, added: todayKey(), shelfDays: L.shelfKnown(name, D) ? L.shelfDays(name, $("gGStorage").value, D) : undefined });
         save(); $("gGName").value = "";
         $("gGMsg").textContent = t("tour.itemSaved", { name: name });
         renderGroceries(); renderSide();
@@ -1932,7 +2463,13 @@
          the weaker pop ever asks. A stop that drew and was
          sailed past (tourNameStopDrawn) is never re-armed
          here: the re-offer discipline owns that road. */
-      if (guideStep > 1 && tourStep1WelcomeDrawn && !tourNameStopDrawn && tourNameVariant()) guideSetStep(1);
+      if (guideStep > 1 && tourStep1WelcomeDrawn && !tourNameStopDrawn && tourNameVariant()) {
+        guideSetStep(1);
+        /* The accounts layer chooses between this stop and its
+           quieter re-ask immediately after refresh. Make the rewound
+           step visible to that decision before the local-save debounce. */
+        flushLocalSave();
+      }
       renderGuideStep();
     },
     /* The ask count is written HERE, by the state owner: the tour

@@ -18,6 +18,16 @@
     });
     return best || d.SHELF[d.SHELF.length - 1];
   }
+  /* A food has a guide date only when the shelf table truly knows
+     it (29 Oct, item 11 honesty, carried from the v63 fix): a name
+     that only meets the silent default entry has no date the app
+     may present as real. An item carrying its own shelfDays number
+     is known by its own record, checked at the call site. */
+  function shelfKnown(name, DATA) {
+    const d = DATA || dataRef();
+    const n = String(name || "").toLowerCase();
+    return d.SHELF.some(function (s) { return s.key !== "default" && n.indexOf(s.key) !== -1; });
+  }
   function shelfDays(name, storage, DATA) {
     const s = shelfLookup(name, DATA);
     const days = s[storage];
@@ -76,7 +86,7 @@
     const n = norm(ingredientName); const t = norm(term);
     if (!n || !t) return false;
     /* Peanut butter and coconut milk or cream carry no dairy, so a milk allergy must not fire on them. */
-    if (t === "milk" && (n.indexOf("coconut") !== -1 || n.indexOf("peanut butter") !== -1)) return false;
+    if (t === "milk" && (/\b(coconut|almond|soy|oat|rice|cashew|hemp|pea) milk\b/.test(n) || n.indexOf("peanut butter") !== -1)) return false;
     /* Coconut is its own food in this app (the dairy swaps lean on it),
        so a nut word must not fire on it either, the same precision. */
     if ((t === "nut" || t === "nuts" || t === "tree nut" || t === "tree nuts") && n.indexOf("coconut") !== -1) return false;
@@ -99,6 +109,112 @@
       });
     });
     return hits;
+  }
+  const DIET_BLOCKS = {
+    vegetarian: ["beef", "lamb", "pork", "chicken", "turkey", "duck", "bacon", "ham", "salami", "sausage", "tuna", "salmon", "fish", "prawn", "shrimp", "crab", "squid", "anchovy", "meat", "gelatin"],
+    pescatarian: ["beef", "lamb", "pork", "chicken", "turkey", "duck", "bacon", "ham", "salami", "sausage", "meat", "gelatin"],
+    vegan: ["beef", "lamb", "pork", "chicken", "turkey", "duck", "bacon", "ham", "salami", "sausage", "tuna", "salmon", "fish", "prawn", "shrimp", "crab", "squid", "anchovy", "meat", "gelatin", "egg", "eggs", "milk", "yogurt", "cheese", "feta", "halloumi", "mozzarella", "parmesan", "cream", "butter", "honey", "mayonnaise", "sour cream"],
+    dairyFree: ["milk", "yogurt", "cheese", "feta", "halloumi", "mozzarella", "parmesan", "cream", "butter", "sour cream"],
+    glutenFree: ["wheat", "flour", "bread", "pasta", "spaghetti", "couscous", "barley", "rye", "tortilla", "pita", "soy sauce", "taco shells", "granola"],
+    halalFriendly: ["pork", "ham", "bacon", "lard", "gelatin", "wine", "beer", "vodka", "rum", "brandy", "sake", "mirin", "cognac", "sherry", "marsala", "bourbon", "whisky", "whiskey", "liqueur"],
+    kidFriendly: ["chili", "chilli", "cayenne", "jalapeno", "habanero", "sriracha", "wasabi", "harissa", "hot sauce", "pepper flakes", "chile"]
+  };
+  function cleanDiet(value) {
+    return ["none", "vegetarian", "vegan", "pescatarian", "dairyFree", "glutenFree", "halalFriendly", "kidFriendly"].indexOf(value) !== -1 ? value : "none";
+  }
+  function cleanServings(value) {
+    const n = Math.round(Number(value));
+    return n >= 1 && n <= 12 ? n : 2;
+  }
+  function cleanCookMinutes(value) {
+    const n = Number(value);
+    return [0, 15, 20, 30, 45, 60, 90, 120, 180].indexOf(n) !== -1 ? n : 60;
+  }
+  /* Busy nights (29 Oct, item 6): the weekdays (0 Sunday to 6
+     Saturday) the person marked busy, and the quick cap for those
+     nights. The quick cap never reads 0: a busy night always has a
+     real cap, defaulting to 30. */
+  function cleanBusyNights(value) {
+    if (!Array.isArray(value)) return [];
+    const out = [];
+    value.forEach(function (v) { const n = Number(v); if (Number.isInteger(n) && n >= 0 && n <= 6 && out.indexOf(n) === -1) out.push(n); });
+    return out.sort(function (a, b) { return a - b; });
+  }
+  function cleanQuickMinutes(value) {
+    const n = Number(value);
+    return [15, 20, 30, 45, 60].indexOf(n) !== -1 ? n : 30;
+  }
+  function cleanRecipeIngredients(value) {
+    if (!Array.isArray(value)) return [];
+    const seen = Object.create(null), out = [];
+    value.forEach(function (item) {
+      const name = String(item == null ? "" : item).trim().slice(0, 80);
+      const key = norm(name);
+      if (name && !seen[key] && out.length < 50) { seen[key] = true; out.push(name); }
+    });
+    return out;
+  }
+  const INGREDIENT_SYNONYMS = [
+    ["capsicum", "bell pepper", "sweet pepper"], ["aubergine", "eggplant"], ["courgette", "zucchini"],
+    ["coriander", "cilantro"], ["chickpea", "chickpeas", "garbanzo", "garbanzo bean", "garbanzo beans"],
+    ["spring onion", "green onion", "scallion"], ["prawn", "shrimp"], ["ground beef", "minced beef", "beef mince"],
+    ["ground pork", "minced pork", "pork mince"], ["rocket", "arugula"], ["corn starch", "cornstarch"],
+    ["powdered sugar", "icing sugar"]
+  ];
+  function matchFoodText(value) {
+    return norm(value).replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean).map(singularWord).join(" ");
+  }
+  function matchFoodCanonical(value) {
+    const text = matchFoodText(value);
+    for (let i = 0; i < INGREDIENT_SYNONYMS.length; i++) {
+      const group = INGREDIENT_SYNONYMS[i].map(matchFoodText);
+      if (group.some(function (name) { return text === name || text.endsWith(" " + name) || text.indexOf(name + " ") === 0; })) return group[0];
+    }
+    return text;
+  }
+  function matchIngredientNames(recipeName, availableName) {
+    const a = matchFoodCanonical(recipeName), b = matchFoodCanonical(availableName);
+    if (!a || !b) return false;
+    if (a === b || a.indexOf(" " + b + " ") !== -1 || b.indexOf(" " + a + " ") !== -1) return true;
+    const stop = { fresh: true, dried: true, ground: true, chopped: true, minced: true, cooked: true, raw: true, large: true, small: true, medium: true, whole: true, finely: true, sliced: true, peeled: true, optional: true, extra: true, virgin: true, the: true, with: true, for: true };
+    const left = a.split(/\s+/).filter(function (w) { return w.length > 2 && !stop[w]; });
+    const right = b.split(/\s+/).filter(function (w) { return w.length > 2 && !stop[w]; });
+    return left.some(function (w) { return right.indexOf(w) !== -1; });
+  }
+  function ingredientHasFoodWord(name, word) {
+    const n = " " + norm(name).replace(/[^a-z0-9]+/g, " ").trim() + " ";
+    const w = " " + norm(word).replace(/[^a-z0-9]+/g, " ").trim() + " ";
+    if (word === "milk" && / (coconut|almond|soy|oat|rice|cashew|hemp|pea) milk /.test(n)) return false;
+    return n.indexOf(w) !== -1;
+  }
+  function recipeDietConflicts(recipe, diet) {
+    const choice = cleanDiet(diet);
+    const blocked = DIET_BLOCKS[choice] || [];
+    if (choice === "halalFriendly" && recipe.halalFriendly === false) return true;
+    if (choice === "kidFriendly" && recipe.kidFriendly === false) return true;
+    return (recipe.ingredients || []).some(function (ingredient) {
+      return blocked.some(function (word) { return ingredientHasFoodWord(ingredient.name, word); });
+    });
+  }
+  function recipeAllowed(recipe, ctx, DATA) {
+    const c = ctx || {};
+    if (!recipe || !Array.isArray(recipe.ingredients)) return false;
+    const maxMinutes = Number(c.maxCookMinutes);
+    if (isFinite(maxMinutes) && maxMinutes > 0 && Number(recipe.minutes || 0) > maxMinutes) return false;
+    if ((c.family || []).some(function (person) { return personConflicts(recipe, person, DATA).length > 0; })) return false;
+    return !recipeDietConflicts(recipe, c.diet);
+  }
+  function scaleRecipe(recipe, servings) {
+    if (!recipe) return recipe;
+    const target = cleanServings(servings);
+    const base = Number(recipe.servings) > 0 ? Number(recipe.servings) : 2;
+    const factor = target / base;
+    return Object.assign({}, recipe, { servings: target, ingredients: (recipe.ingredients || []).map(function (ingredient) {
+      const copy = Object.assign({}, ingredient);
+      const qty = Number(ingredient.qty);
+      if (ingredient.qty !== null && ingredient.qty !== undefined && ingredient.qty !== "" && isFinite(qty)) copy.qty = Math.round(qty * factor * 100) / 100;
+      return copy;
+    }) });
   }
   function swapFor(ingredientName, DATA) {
     const d = DATA || dataRef();
@@ -151,33 +267,53 @@
   }
   function recipeScore(recipe, ctx) {
     let score = 0;
-    const prefs = (ctx.preferences || []).map(norm);
-    recipe.cuisines.forEach(function (c) { if (prefs.indexOf(norm(c)) !== -1) score += 25; });
-    const expiring = (ctx.expiringNames || []).map(norm);
-    recipe.ingredients.forEach(function (i) {
-      expiring.forEach(function (e) { if (norm(i.name).indexOf(e) !== -1 || e.indexOf(norm(i.name)) !== -1) score += 12; });
+    const c = ctx || {};
+    const prefs = (c.preferences || []).map(norm);
+    (recipe.cuisines || []).forEach(function (cuisine) { if (prefs.indexOf(norm(cuisine)) !== -1) score += 25; });
+    const expiring = (c.expiringNames || []).map(norm);
+    const pantry = (c.pantryNames || []).map(norm);
+    (recipe.ingredients || []).forEach(function (ingredient) {
+      expiring.forEach(function (e) { if (norm(ingredient.name).indexOf(e) !== -1 || e.indexOf(norm(ingredient.name)) !== -1) score += 12; });
+      if (pantry.some(function (p) { return p && (norm(ingredient.name).indexOf(p) !== -1 || p.indexOf(norm(ingredient.name)) !== -1); })) score += 5;
     });
-    if (recipeUsesExpiring(recipe, expiring, ctx.coveredExpiring)) score += EXPIRING_TIER;
-    const used = (ctx.usedCounts || {})[recipe.id] || 0;
+    if (recipeUsesExpiring(recipe, expiring, c.coveredExpiring)) score += EXPIRING_TIER;
+    const used = (c.usedCounts || {})[recipe.id] || 0;
     score -= used * 22;
-    const family = ctx.family || [];
-    let blocked = false;
-    family.forEach(function (p) {
-      (p.allergies || []).forEach(function (a) {
-        recipe.ingredients.forEach(function (i) { if (norm(i.name).indexOf(norm(a)) !== -1 && a) blocked = blocked; });
-      });
-    });
-    if ((ctx.recentIds || []).indexOf(recipe.id) !== -1) score -= 40;
+    if (Number(c.defaultServings) > 0) score -= Math.abs((Number(recipe.servings) || 2) - Number(c.defaultServings)) * 2;
+    if ((c.recentIds || []).indexOf(recipe.id) !== -1) score -= 40;
     return score;
+  }
+  function recipeMatch(recipe, available) {
+    const foods = cleanRecipeIngredients(available);
+    const matched = [], missing = [];
+    (recipe && recipe.ingredients || []).forEach(function (ingredient) {
+      const found = foods.some(function (food) { return matchIngredientNames(ingredient.name, food); });
+      if (found) matched.push(ingredient.name); else missing.push(ingredient.name);
+    });
+    return { matched: matched, missing: missing, usedCount: matched.length, needCount: matched.length + missing.length, availableCount: foods.length };
+  }
+  function rankRecipes(recipes, ctx, DATA) {
+    const c = ctx || {};
+    const available = cleanRecipeIngredients(c.matchIngredients !== undefined ? c.matchIngredients : c.pantryNames);
+    const scoringCtx = Object.assign({}, c, { pantryNames: available });
+    return (recipes || []).filter(function (recipe) { return recipeAllowed(recipe, c, DATA); }).map(function (recipe) {
+      const match = recipeMatch(recipe, available);
+      const ratio = match.needCount ? match.usedCount / match.needCount : 0;
+      const score = recipeScore(recipe, scoringCtx) + match.usedCount * 80 + ratio * 40 - match.missing.length * 4;
+      return { recipe: recipe, match: match, score: score };
+    }).sort(function (a, b) {
+      return b.score - a.score || b.match.usedCount - a.match.usedCount || a.match.missing.length - b.match.missing.length || String(a.recipe.name).localeCompare(String(b.recipe.name));
+    });
   }
   function pickRecipe(meal, ctx, DATA) {
     const d = DATA || dataRef();
+    const c = ctx || {};
     const pool = d.RECIPES.filter(function (r) { return r.meal === meal; });
-    const custom = (ctx.customRecipes || []).filter(function (r) { return r.meal === meal; });
-    const all = pool.concat(custom);
+    const custom = (c.customRecipes || []).filter(function (r) { return r.meal === meal; });
+    const all = pool.concat(custom).filter(function (recipe) { return recipeAllowed(recipe, c, d); });
     let best = null, bestScore = -Infinity;
     all.forEach(function (r) {
-      const s = recipeScore(r, ctx) + Math.random() * 15;
+      const s = recipeScore(r, c) + Math.random() * 15;
       if (s > bestScore) { bestScore = s; best = r; }
     });
     return best;
@@ -187,6 +323,21 @@
     return y + "." + m + "." + dd;
   }
   function parseKey(key) { const p = key.split("."); return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 12); }
+  /* Busy nights (29 Oct proposal, item 6): on a weekday the person
+     marked busy, the planner's cook time cap tightens to the quick
+     cap, so only fast meals land there. Any other day the context
+     passes through untouched. A global cap, when set, still wins
+     when it is the tighter of the two. */
+  function planCtxForDay(ctx, key) {
+    const c = ctx || {};
+    const busy = Array.isArray(c.busyNights) ? c.busyNights : [];
+    if (!busy.length) return c;
+    if (busy.indexOf(parseKey(key).getDay()) === -1) return c;
+    const quick = Number(c.quickMinutes) > 0 ? Number(c.quickMinutes) : 30;
+    const global = Number(c.maxCookMinutes) > 0 ? Number(c.maxCookMinutes) : 0;
+    const cap = global > 0 ? Math.min(global, quick) : quick;
+    return Object.assign({}, c, { maxCookMinutes: cap });
+  }
   function buildPlan(startKey, numDays, ctx, DATA) {
     const plan = {};
     const recent = [];
@@ -198,8 +349,9 @@
       const dt = parseKey(startKey); dt.setDate(dt.getDate() + i);
       const key = dateKey(dt);
       plan[key] = {};
+      const dayCtx = planCtxForDay(ctx, key);
       ["breakfast", "lunch", "dinner"].forEach(function (meal) {
-        const r = pickRecipe(meal, Object.assign({}, ctx, { recentIds: recent.slice(-6), usedCounts: usedCounts, coveredExpiring: coveredExpiring }), DATA);
+        const r = pickRecipe(meal, Object.assign({}, dayCtx, { recentIds: recent.slice(-42), usedCounts: usedCounts, coveredExpiring: coveredExpiring }), DATA);
         if (r) {
           plan[key][meal] = r.id; recent.push(r.id); usedCounts[r.id] = (usedCounts[r.id] || 0) + 1;
           (ctx.expiringNames || []).forEach(function (e) {
@@ -326,16 +478,21 @@
     out.sort(function (a, b) { return a.at - b.at; });
     return out;
   }
-  /* The grocery list, split in two (the ruling of 18 Oct, build 8):
-     what the pantry covers comes OFF the buy list whole, because the
-     pantry is have or have not, with no amounts, so a covered item is
-     never partly subtracted. Covered items land in the atHome set with
-     their full planned amount, shown in the Already at home strip.
-     backOnList is the per list override (state.atHomeBack, keyed
-     name|unit like doneItems and hiddenItems): a covered item the
-     person put back rides the buy list again, amount intact. The
-     aggregation itself (amounts summed per name and unit, aisle
-     grouping, ordering) is unchanged. */
+  /* The grocery list, split in two (the ruling of 18 Oct, build 8;
+     amounts added 29 Oct, proposal item 9): what the pantry covers
+     comes OFF the buy list. Where the pantry holds a known amount in
+     the same unit, that amount is subtracted and only the shortfall
+     rides the buy list, carrying haveQty so the row can say what is
+     already at home. Where the amount is unknown or the unit differs,
+     the cover stays whole, as in build 8: the maths never guesses.
+     Covered items land in the atHome set with their full planned
+     amount, shown in the Already at home strip. backOnList is the
+     per list override (state.atHomeBack, keyed name|unit like
+     doneItems and hiddenItems): a covered item the person put back
+     rides the buy list again, amount intact. The aggregation itself
+     (amounts summed per name and unit, aisle grouping, ordering) is
+     unchanged, and each line now also names the recipes that need it
+     (forRecipes, proposal item 8). */
   function buildGroceryList(plan, allRecipes, pantry, backOnList) {
     const need = {};
     Object.keys(plan || {}).forEach(function (day) {
@@ -344,8 +501,9 @@
         const r = allRecipes.filter(function (x) { return x.id === id; })[0]; if (!r) return;
         r.ingredients.forEach(function (i) {
           const k = norm(i.name) + "|" + i.unit;
-          if (!need[k]) need[k] = { name: i.name, qty: 0, unit: i.unit, category: i.category || "Other" };
+          if (!need[k]) need[k] = { name: i.name, qty: 0, unit: i.unit, category: i.category || "Other", forRecipes: [], forRecipeIds: [] };
           need[k].qty += Number(i.qty) || 0;
+          if (need[k].forRecipes.indexOf(r.name) === -1) { need[k].forRecipes.push(r.name); need[k].forRecipeIds.push(r.id); }
         });
       });
     });
@@ -358,11 +516,68 @@
       const stocked = have[norm(item.name)];
       item.haveIt = !!stocked;
       item.qty = Math.round(item.qty * 10) / 10;
-      if (stocked && !back[item.name + "|" + item.unit]) atHome.push(item);
+      const putBack = !!back[item.name + "|" + item.unit];
+      const haveQty = stocked && typeof stocked.qty === "number" && isFinite(stocked.qty) && stocked.qty > 0 && String(stocked.unit || "").toLowerCase() === String(item.unit || "").toLowerCase() ? stocked.qty : null;
+      if (stocked && !putBack && haveQty !== null && haveQty >= item.qty) { item.haveQty = haveQty; atHome.push(item); }
+      else if (stocked && !putBack && haveQty !== null) { item.haveQty = haveQty; item.qty = Math.round((item.qty - haveQty) * 10) / 10; buy.push(item); }
+      else if (stocked && !putBack) atHome.push(item);
       else buy.push(item);
     });
     const byAisle = function (a, b) { return (a.category + a.name).localeCompare(b.category + b.name); };
     return { buy: buy.sort(byAisle), atHome: atHome.sort(byAisle) };
+  }
+  /* Mark cooked (29 Oct, item 12): the recipe's ingredients come off
+     the pantry where the name matches, the unit matches, and an
+     amount is known, the same honesty rule as the grocery cover.
+     An item that reaches zero leaves the shelf. Returns the new
+     pantry and the names that were used, so the app can say what
+     happened in plain words. The input pantry is not mutated. */
+  function applyCooked(pantry, recipe) {
+    const out = (pantry || []).map(function (p) { return Object.assign({}, p); });
+    const taken = [];
+    (recipe && recipe.ingredients || []).forEach(function (ing) {
+      const q = Number(ing.qty);
+      if (ing.qty === null || ing.qty === undefined || ing.qty === "" || !isFinite(q) || q <= 0 || !ing.unit || ing.unit === "to taste") return;
+      const ix = out.findIndex(function (p) { return typeof p.qty === "number" && isFinite(p.qty) && String(p.unit || "").toLowerCase() === String(ing.unit).toLowerCase() && matchIngredientNames(ing.name, p.name); });
+      if (ix === -1) return;
+      const item = out[ix];
+      const left = Math.round((item.qty - q) * 10) / 10;
+      if (taken.indexOf(item.name) === -1) taken.push(item.name);
+      if (left <= 0) out.splice(ix, 1); else item.qty = left;
+    });
+    return { pantry: out, taken: taken };
+  }
+  /* Expiry nudges (29 Oct, item 14): one entry per food, at 9 in the
+     morning on the day before its best until date, inside the next
+     days window. At most three foods share a morning, soonest first,
+     so the nudge stays kind. Ids live at dayId + 50 and up, clear of
+     the meal reminder ids (dayId + 0, 1, 10, 11, 20, 21). */
+  function expirySchedule(state, DATA, fromDate, days) {
+    const out = [];
+    if (!state || !Array.isArray(state.pantry)) return out;
+    const from = new Date(fromDate); from.setHours(0, 0, 0, 0);
+    const until = new Date(from.getTime() + Math.max(0, Math.floor(Number(days)) || 0) * 86400000);
+    const byDay = {};
+    state.pantry.forEach(function (item) {
+      if (!item || !item.name) return;
+      /* A nudge is a promise: foods with no known guide date (no
+         recorded shelfDays and no shelf table match) never nudge,
+         because their date would be invented. */
+      if (typeof item.shelfDays !== "number" && !shelfKnown(item.name, DATA)) return;
+      const exp = expiryFor(item, DATA); exp.setHours(12, 0, 0, 0);
+      const noteDay = new Date(exp.getTime() - 86400000); noteDay.setHours(9, 0, 0, 0);
+      if (noteDay < from || noteDay > until) return;
+      const k = dateKey(noteDay);
+      (byDay[k] = byDay[k] || []).push({ item: item, exp: exp, at: noteDay });
+    });
+    Object.keys(byDay).sort().forEach(function (k) {
+      byDay[k].sort(function (a, b) { return a.exp - b.exp || String(a.item.name).localeCompare(String(b.item.name)); });
+      const dayId = Math.round(Date.UTC(byDay[k][0].at.getFullYear(), byDay[k][0].at.getMonth(), byDay[k][0].at.getDate()) / 86400000) * 100;
+      byDay[k].slice(0, 3).forEach(function (e, ix) {
+        out.push({ id: dayId + 50 + ix, kind: "expiry", key: k, name: e.item.name, at: e.at, expiryKey: dateKey(e.exp) });
+      });
+    });
+    return out.sort(function (a, b) { return a.at - b.at; });
   }
   function findRecipeByName(name, DATA, custom) {
     const d = DATA || dataRef();
@@ -462,41 +677,10 @@
     const r = estimateRange(kcal);
     return { food: name, label: s.label, grams: s.grams, kcal: kcal, low: r.low, high: r.high };
   }
+  /* A recipe name may find an existing built-in or saved recipe. It must
+     never fabricate ingredients or cooking steps for an unknown dish. */
   function makeRecipeFromName(name, DATA, custom) {
-    const found = findRecipeByName(name, DATA, custom || []);
-    if (found) return found;
-    const stop = ["grandma", "grandmas", "homemade", "easy", "best", "my", "the", "fresh", "quick", "simple"];
-    const words = norm(name).split(/\s+/).filter(function (w) { return w.length > 2 && stop.indexOf(w) === -1; });
-    /* The main ingredient is the first real food word in the name (lemon in Greek lemon potatoes,
-       mushroom in mushroom risotto), never a style word like greek or thai. */
-    const FOOD_WORDS = ["mushroom", "tomato", "potato", "potatoes", "quinoa", "falafel", "miso", "lemon", "chicken", "beef", "lamb", "pork", "meat", "pumpkin", "berry", "berries", "apple", "banana", "carrot", "broccoli", "spinach", "cheese", "egg", "eggs", "salmon", "tuna", "prawn", "tofu", "lentil", "lentils", "bean", "beans", "rice", "pasta", "spaghetti", "noodle", "noodles", "oat", "oats", "risotto", "avocado", "corn", "pea", "peas", "zucchini", "capsicum", "onion", "garlic", "ginger", "chilli", "coconut", "peanut", "almond", "walnut", "honey", "yogurt", "milk", "cream", "butter", "flour", "sugar", "chocolate", "coffee", "vanilla", "strawberry", "blueberry", "mango", "pineapple", "watermelon", "cucumber", "lettuce", "cabbage", "cauliflower", "sausage", "bacon", "ham", "turkey", "duck", "fish", "crab", "squid", "seaweed", "kimchi", "curry", "salsa", "pesto", "hummus", "tahini", "couscous", "barley", "millet", "smoothie"];
-    const STYLE_WORDS = ["greek", "thai", "indian", "mexican", "italian", "asian", "american", "australian", "mediterranean", "french", "japanese", "korean", "vietnamese", "spanish", "moroccan", "turkish"];
-    let main = null;
-    for (let i = 0; i < words.length && !main; i++) if (FOOD_WORDS.indexOf(words[i]) !== -1) main = words[i];
-    if (!main) {
-      const rest = words.filter(function (w) { return STYLE_WORDS.indexOf(w) === -1; });
-      if (rest.length && rest[0].length >= 4) main = rest[0];
-    }
-    function plural(w) {
-      const keep = ["rice", "pasta", "sushi", "gnocchi", "couscous", "hummus", "asparagus", "spinach", "broccoli", "cauliflower", "chicken", "miso", "spaghetti", "quinoa", "meat", "beef", "lamb", "pork"];
-      if (!w || keep.indexOf(w) !== -1 || /s$/.test(w)) return w;
-      if (/(o)$/.test(w)) return w + "es";
-      if (/[^aeiou]y$/.test(w)) return w.slice(0, -1) + "ies";
-      if (/(ch|sh|x|z)$/.test(w)) return w + "es";
-      return w + "s";
-    }
-    const mainName = main ? plural(main) : "main ingredient of your choice";
-    return {
-      id: "custom." + Date.now(), name: name, meal: "dinner", cuisines: ["Comfort"], minutes: 30, servings: 2, custom: true,
-      ingredients: [
-        { name: mainName, qty: 400, unit: "g", category: "Other" },
-        { name: "onion", qty: 1, unit: "pcs", category: "Produce" },
-        { name: "garlic", qty: 2, unit: "cloves", category: "Produce" },
-        { name: "olive oil", qty: 2, unit: "tbsp", category: "Pantry" },
-        { name: "rice", qty: 200, unit: "g", category: "Pantry" }
-      ],
-      steps: ["Prep all ingredients and wash the fresh ones.", "Cook the " + mainName + " in olive oil until golden.", "Add onion and garlic and cook 5 minutes until soft.", "Add a splash of water, cover and simmer 12 minutes.", "Season to taste, rest 3 minutes and serve with rice."]
-    };
+    return findRecipeByName(name, DATA, custom || []);
   }
   /* Navigation calm (14 Oct house law): the side menu is grouped by main area.
      Preferences is a footer row, not a group, so it is in no group here. */
@@ -632,6 +816,7 @@
     if (Array.isArray(s.family) && s.family.length) return true;
     if (Array.isArray(s.pantry) && s.pantry.length) return true;
     if (Array.isArray(s.customRecipes) && s.customRecipes.length) return true;
+    if (Array.isArray(s.favorites) && s.favorites.length) return true;
     if (s.plan && typeof s.plan === "object") {
       const keys = Object.keys(s.plan);
       for (let i = 0; i < keys.length; i++) {
@@ -649,6 +834,10 @@
     return {
       onboarded: false, notifications: "off",
       preferences: [],
+      diet: "none", maxCookMinutes: 60, defaultServings: 2,
+      busyNights: [], quickMinutes: 30,
+      cooked: {}, leftovers: {},
+      recipeIngredients: [], recipeIngredientsManual: false, photoTrialUsed: false,
       eatTimes: { breakfast: "07:30", lunch: "12:30", dinner: "18:30" },
       setupMinutes: 5,
       extraReminders: { breakfast: 0, lunch: 0, dinner: 0 },
@@ -656,7 +845,7 @@
       reminderMode: { breakfast: "cook", lunch: "cook", dinner: "cook" },
       reminderTimes: { breakfast: "", lunch: "", dinner: "" },
       family: [], pantry: [],
-      plan: {}, planCleared: false, customRecipes: [], extras: [], events: [], imports: [], doneItems: {}, hiddenItems: {}, atHomeBack: {}, sentReminders: {},
+      plan: {}, planCleared: false, customRecipes: [], favorites: [], extras: [], events: [], imports: [], doneItems: {}, hiddenItems: {}, atHomeBack: {}, sentReminders: {},
       navTucked: [],
       guideState: { status: "notStarted", step: 1, v: 2, nameAsks: 0, nameAskVisit: "" },
       accountName: "",
@@ -719,7 +908,7 @@
       return { key: r.key, source: String(r.source || "calendar"), at: String(r.at || ""), count: Math.max(0, Math.round(+r.count) || 0) };
     });
   }
-  const API = { shelfLookup: shelfLookup, shelfDays: shelfDays, expiryFor: expiryFor, daysLeft: daysLeft, sortByExpiry: sortByExpiry, personConflicts: personConflicts, swapFor: swapFor, adaptations: adaptations, recipeScore: recipeScore, recipeUsesExpiring: recipeUsesExpiring, EXPIRING_TIER: EXPIRING_TIER, pickRecipe: pickRecipe, dateKey: dateKey, parseKey: parseKey, buildPlan: buildPlan, reminderTime: reminderTime, extraReminderTime: extraReminderTime, formatTime: formatTime, cleanSkips: cleanSkips, cleanReminderMode: cleanReminderMode, cleanReminderTimes: cleanReminderTimes, reminderSchedule: reminderSchedule, buildGroceryList: buildGroceryList, findRecipeByName: findRecipeByName, makeRecipeFromName: makeRecipeFromName, recipeKcal: recipeKcal, photoKcal: photoKcal, fridgeKcal: fridgeKcal, ingredientGrams: ingredientGrams, NAV_GROUPS: NAV_GROUPS, navGroupForView: navGroupForView, cleanTucked: cleanTucked, canTuckGroup: canTuckGroup, BG_KINDS: BG_KINDS, cleanBackgroundKind: cleanBackgroundKind, cleanBackgroundPhoto: cleanBackgroundPhoto, cleanBackgroundSettings: cleanBackgroundSettings, LANG_CHOICES: LANG_CHOICES, cleanLanguageChoice: cleanLanguageChoice, PERSON_COLORS: PERSON_COLORS, OLD_PERSON_COLOR_MAP: OLD_PERSON_COLOR_MAP, mapPersonColor: mapPersonColor, GUIDE_STATUSES: GUIDE_STATUSES, cleanGuideState: cleanGuideState, stateHasUserData: stateHasUserData, blankState: blankState, removeAt: removeAt, restoreAt: restoreAt, cleanEvents: cleanEvents, cleanImports: cleanImports };
+  const API = { shelfLookup: shelfLookup, shelfKnown: shelfKnown, shelfDays: shelfDays, expiryFor: expiryFor, daysLeft: daysLeft, sortByExpiry: sortByExpiry, personConflicts: personConflicts, recipeDietConflicts: recipeDietConflicts, recipeAllowed: recipeAllowed, scaleRecipe: scaleRecipe, cleanDiet: cleanDiet, cleanCookMinutes: cleanCookMinutes, cleanServings: cleanServings, cleanRecipeIngredients: cleanRecipeIngredients, matchIngredientNames: matchIngredientNames, recipeMatch: recipeMatch, rankRecipes: rankRecipes, swapFor: swapFor, adaptations: adaptations, recipeScore: recipeScore, recipeUsesExpiring: recipeUsesExpiring, EXPIRING_TIER: EXPIRING_TIER, pickRecipe: pickRecipe, planCtxForDay: planCtxForDay, cleanBusyNights: cleanBusyNights, cleanQuickMinutes: cleanQuickMinutes, dateKey: dateKey, parseKey: parseKey, buildPlan: buildPlan, reminderTime: reminderTime, extraReminderTime: extraReminderTime, formatTime: formatTime, cleanSkips: cleanSkips, cleanReminderMode: cleanReminderMode, cleanReminderTimes: cleanReminderTimes, reminderSchedule: reminderSchedule, expirySchedule: expirySchedule, applyCooked: applyCooked, buildGroceryList: buildGroceryList, findRecipeByName: findRecipeByName, makeRecipeFromName: makeRecipeFromName, recipeKcal: recipeKcal, photoKcal: photoKcal, fridgeKcal: fridgeKcal, ingredientGrams: ingredientGrams, NAV_GROUPS: NAV_GROUPS, navGroupForView: navGroupForView, cleanTucked: cleanTucked, canTuckGroup: canTuckGroup, BG_KINDS: BG_KINDS, cleanBackgroundKind: cleanBackgroundKind, cleanBackgroundPhoto: cleanBackgroundPhoto, cleanBackgroundSettings: cleanBackgroundSettings, LANG_CHOICES: LANG_CHOICES, cleanLanguageChoice: cleanLanguageChoice, PERSON_COLORS: PERSON_COLORS, OLD_PERSON_COLOR_MAP: OLD_PERSON_COLOR_MAP, mapPersonColor: mapPersonColor, GUIDE_STATUSES: GUIDE_STATUSES, cleanGuideState: cleanGuideState, stateHasUserData: stateHasUserData, blankState: blankState, removeAt: removeAt, restoreAt: restoreAt, cleanEvents: cleanEvents, cleanImports: cleanImports };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   global.MP_LOGIC = API;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -714,6 +714,28 @@ window.MP_DATA = (function () {
     { key: "beans", label: "Beans, canned or dry", fridge: 4, freezer: 180, pantry: 365 },
     { key: "tuna", label: "Tuna, canned", fridge: 3, freezer: 0, pantry: 730 },
     { key: "falafel", label: "Falafel, frozen", fridge: 3, freezer: 180, pantry: 0 },
+    { key: "mushroom", label: "Mushrooms", fridge: 5, freezer: 270, pantry: 0 },
+    { key: "pickles", label: "Pickles, opened jar", fridge: 90, freezer: 0, pantry: 1 },
+    { key: "jam", label: "Jam, opened jar", fridge: 180, freezer: 0, pantry: 30 },
+    { key: "mayonnaise", label: "Mayonnaise, opened jar", fridge: 60, freezer: 0, pantry: 1 },
+    { key: "mustard", label: "Mustard, opened jar", fridge: 365, freezer: 0, pantry: 30 },
+    { key: "ketchup", label: "Ketchup, opened bottle", fridge: 180, freezer: 0, pantry: 30 },
+    { key: "soy sauce", label: "Soy sauce, opened bottle", fridge: 365, freezer: 0, pantry: 180 },
+    { key: "orange juice", label: "Orange juice, opened", fridge: 7, freezer: 270, pantry: 0 },
+    { key: "ice cream", label: "Ice cream", fridge: 0, freezer: 60, pantry: 0 },
+    { key: "apple", label: "Apples", fridge: 28, freezer: 270, pantry: 7 },
+    { key: "orange", label: "Oranges", fridge: 21, freezer: 0, pantry: 7 },
+    { key: "grapes", label: "Grapes", fridge: 7, freezer: 270, pantry: 2 },
+    { key: "strawberr", label: "Strawberries", fridge: 5, freezer: 270, pantry: 1 },
+    { key: "garlic", label: "Garlic", fridge: 60, freezer: 0, pantry: 30 },
+    { key: "celery", label: "Celery", fridge: 14, freezer: 0, pantry: 2 },
+    { key: "cabbage", label: "Cabbage", fridge: 14, freezer: 0, pantry: 3 },
+    { key: "bacon", label: "Bacon, raw", fridge: 7, freezer: 30, pantry: 0 },
+    { key: "sausage", label: "Sausages, raw", fridge: 2, freezer: 60, pantry: 0 },
+    { key: "tofu", label: "Tofu, opened", fridge: 5, freezer: 150, pantry: 0 },
+    { key: "hummus", label: "Hummus, opened", fridge: 6, freezer: 0, pantry: 0 },
+    { key: "olives", label: "Olives, opened jar", fridge: 14, freezer: 0, pantry: 1 },
+    { key: "shrimp", label: "Shrimp, raw", fridge: 2, freezer: 180, pantry: 0 },
     { key: "default", label: "Most fresh food", fridge: 5, freezer: 90, pantry: 7 }
   ];
   /* Spanish shelf labels (QA F1 on the v37 vehicle): the shelf table
@@ -778,6 +800,28 @@ window.MP_DATA = (function () {
     "beans": "Frijoles, enlatados o secos",
     "tuna": "Atún, enlatado",
     "falafel": "Falafel, congelado",
+    "mushroom": "Champiñones",
+    "pickles": "Pepinillos",
+    "jam": "Mermelada",
+    "mayonnaise": "Mayonesa",
+    "mustard": "Mostaza",
+    "ketchup": "Kétchup",
+    "soy sauce": "Salsa de soja",
+    "orange juice": "Zumo de naranja",
+    "ice cream": "Helado",
+    "apple": "Manzana",
+    "orange": "Naranja",
+    "grapes": "Uvas",
+    "strawberr": "Fresas",
+    "garlic": "Ajo",
+    "celery": "Apio",
+    "cabbage": "Repollo",
+    "bacon": "Beicon",
+    "sausage": "Salchichas",
+    "tofu": "Tofu",
+    "hummus": "Hummus",
+    "olives": "Aceitunas",
+    "shrimp": "Gambas",
     "default": "La mayoría de la comida fresca"
   };
   SHELF.forEach(function (s) { const es = SHELF_ES[s.key]; if (es) s.es = es; });
@@ -807,14 +851,20 @@ window.MP_DATA = (function () {
      Peanut hides in peanut butter and satay. Nut is the umbrella word a person types: peanut and the
      tree nuts together. Tree nut is the tree nuts alone, never peanut (a different allergy). */
   const ALLERGEN_GROUPS = {
-    "milk": ["butter", "cheese", "feta", "mozzarella", "yogurt", "cream", "halloumi", "parmesan"],
+    "milk": ["butter", "cheese", "feta", "mozzarella", "yogurt", "cream", "halloumi", "parmesan", "ghee", "whey", "buttermilk", "casein"],
+    "dairy": ["milk", "butter", "cheese", "feta", "mozzarella", "yogurt", "cream", "halloumi", "parmesan", "ghee", "whey", "buttermilk", "casein"],
     "cheese": ["feta", "mozzarella", "halloumi", "parmesan"],
-    "gluten": ["flour", "bread", "pasta", "spaghetti", "couscous", "tortilla", "pita", "pizza base", "noodles", "taco shells", "soy sauce", "rolled oats"],
-    "egg": ["mayonnaise"],
-    "wheat": ["flour", "bread", "pasta", "spaghetti", "couscous", "tortilla", "pita", "pizza base", "noodles", "taco shells", "soy sauce", "rolled oats"],
+    "gluten": ["flour", "bread", "pasta", "spaghetti", "couscous", "barley", "rye", "tortilla", "pita", "pizza base", "noodles", "taco shells", "soy sauce", "rolled oats"],
+    "wheat": ["flour", "bread", "pasta", "spaghetti", "couscous", "barley", "rye", "tortilla", "pita", "pizza base", "noodles", "taco shells", "soy sauce", "rolled oats"],
+    "egg": ["mayonnaise", "egg yolk", "egg white", "albumen"],
     "peanut": ["peanut butter", "peanut sauce", "satay"],
+    "soy": ["soy sauce", "tamari", "tofu", "tempeh", "edamame", "miso", "soybean", "soybeans"],
+    "sesame": ["tahini", "sesame oil", "sesame seeds"],
+    "fish": ["salmon", "tuna", "cod", "anchovy", "sardine", "mackerel", "fish sauce", "trout", "haddock"],
+    "shellfish": ["shrimp", "prawn", "crab", "lobster", "mussel", "clam", "oyster", "scallop", "crayfish", "prawn paste"],
     "nut": ["peanut butter", "pine nuts", "almond", "walnut", "cashew", "hazelnut", "pecan", "pistachio", "macadamia", "brazil nut", "chestnut"],
     "tree nut": ["pine nuts", "almond", "walnut", "cashew", "hazelnut", "pecan", "pistachio", "macadamia", "brazil nut", "chestnut"]
   };
-  return { CUISINES: CUISINES, MEALS: MEALS, RECIPES: R, SHELF: SHELF, SWAPS: SWAPS, FRIDGE_COMMON: FRIDGE_COMMON, ALLERGEN_GROUPS: ALLERGEN_GROUPS };
+  if (Array.isArray(window.MP_OPEN_RECIPES)) Array.prototype.push.apply(R, window.MP_OPEN_RECIPES);
+  return { CUISINES: CUISINES, MEALS: MEALS, RECIPES: R, SHELF: SHELF, SWAPS: SWAPS, FRIDGE_COMMON: FRIDGE_COMMON, ALLERGEN_GROUPS: ALLERGEN_GROUPS, OPEN_RECIPES_META: window.MP_OPEN_RECIPES_META || null };
 })();
