@@ -1,0 +1,162 @@
+# Meal Prep — iOS IPA cloud build (GitHub Actions, macos-latest)
+#
+# Target location in repo: .github/workflows/ios-ipa.yml
+# Repo: support897/meal-prep-app · App tree: store-build/ (certified v34,
+# service worker "mealprep-v73", bundle com.ilseplacencia.mealprep)
+#
+# Signing material comes from repo secrets ONLY:
+#   DIST_CERT_P12_B64        base64 of the Apple Distribution .p12
+#   DIST_CERT_PASSWORD       the .p12 password
+#   PROVISIONING_PROFILE_B64 base64 of "Meal Prep App Store" .mobileprovision
+# Team: GZ9Z6BPTFR · Profile name: Meal Prep App Store
+#
+# The web tree (store-build/www) is assembled from the repo-root app files:
+# every file in the certified www tree is byte-identical to the repo-root
+# file of the same path (verified 16 Oct 2026); the only www-only file,
+# manifest.json, is committed under store-build/www/.
+
+name: iOS IPA (Meal Prep)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ipa:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: store-build
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: store-build/package-lock.json
+
+      - name: Assemble certified www tree from repo root
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          FILES="account-sync.js accounts-config.js accounts.js app.js auth.js calendar-import.js data.js delete-account.html delete-account.js demo-seed.js food-eye.js icon-192.png icon-512.png icon-maskable-512.png icon.svg index.html lang.js logic.js logo.svg manifest.webmanifest mina-celebrate.svg mina-point-show.svg mina-wave-goodbye.svg mina-welcome.svg nutrition.js open-recipes.js payments-config.js payments.js prices-table.js recipe-import.js service-worker.js styles.css vendor-firebase/firebase-app-compat.js vendor-firebase/firebase-auth-compat.js vendor-firebase/firebase-firestore-compat.js vendor/coco-ssd.min.js vendor/fonts/Fraunces.ttf vendor/fonts/NunitoSans.ttf vendor/hf/food-labels.json vendor/hf/transformers.min.js vendor/ical/ical.min.js vendor/model/group1-shard1of5 vendor/model/group1-shard2of5 vendor/model/group1-shard3of5 vendor/model/group1-shard4of5 vendor/model/group1-shard5of5 vendor/model/model.json vendor/tf.min.js"
+          for f in $FILES; do
+            mkdir -p "store-build/www/$(dirname "$f")"
+            cp "$f" "store-build/www/$f"
+          done
+          grep -q 'mealprep-v73' store-build/www/service-worker.js
+          echo "www tree assembled: $(find store-build/www -type f | wc -l) files"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Capacitor sync (iOS)
+        run: npx cap sync ios
+
+      - name: Install distribution certificate into a temporary keychain
+        env:
+          DIST_CERT_P12_B64: ${{ secrets.DIST_CERT_P12_B64 }}
+          DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH=$RUNNER_TEMP/dist.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          echo -n "$DIST_CERT_P12_B64" | base64 --decode -o "$CERT_PATH"
+          security create-keychain -p "$DIST_CERT_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$DIST_CERT_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$DIST_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$DIST_CERT_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+      - name: Install provisioning profile
+        env:
+          PROVISIONING_PROFILE_B64: ${{ secrets.PROVISIONING_PROFILE_B64 }}
+        run: |
+          set -euo pipefail
+          PP_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PP_DIR"
+          echo -n "$PROVISIONING_PROFILE_B64" | base64 --decode -o "$RUNNER_TEMP/profile.mobileprovision"
+          UUID=$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" | plutil -extract UUID raw -)
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$PP_DIR/$UUID.mobileprovision"
+          echo "Installed provisioning profile UUID $UUID"
+
+      - name: Write ExportOptions.plist
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>GZ9Z6BPTFR</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.ilseplacencia.mealprep</key>
+              <string>Meal Prep App Store</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Switch the App target to manual distribution signing (CI copy only)
+        run: |
+          perl -pi -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = GZ9Z6BPTFR;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "Meal Prep App Store";/' ios/App/App.xcodeproj/project.pbxproj
+          perl -pi -e 's/CODE_SIGN_IDENTITY = "iPhone Developer";/CODE_SIGN_IDENTITY = "Apple Distribution";/' ios/App/App.xcodeproj/project.pbxproj
+          grep -E "CODE_SIGN_STYLE|DEVELOPMENT_TEAM|PROVISIONING_PROFILE_SPECIFIER|CODE_SIGN_IDENTITY" ios/App/App.xcodeproj/project.pbxproj | sort -u
+
+      - name: Archive (Release, manual signing)
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive"
+
+      - name: Export IPA
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+          ls -la "$RUNNER_TEMP/export"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meal-prep-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
+      - name: Upload to App Store Connect
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8_B64: ${{ secrets.ASC_API_KEY_P8_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          echo -n "$ASC_API_KEY_P8_B64" | base64 --decode -o "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_API_KEY_ID}.p8"
+          set +e
+          xcrun altool --upload-app -f "$RUNNER_TEMP/export/App.ipa" -t ios --apiKey "$ASC_API_KEY_ID" --apiIssuer "$ASC_API_ISSUER_ID"
+          ALTOOL_STATUS=$?
+          set -e
+          echo "altool exit code: $ALTOOL_STATUS"
+          exit "$ALTOOL_STATUS"
