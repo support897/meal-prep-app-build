@@ -164,16 +164,26 @@
       <header class="topBar"><div><h1 data-i18n="nav.recipes">Recipes</h1><p class="sub" data-i18n="recipes.sub">Add recipes your way, or search the ones you have.</p></div></header>
       <div class="card">
         <h2 data-i18n="recipes.addTitle">Add your recipe</h2>
-        <p class="hint" data-i18n="recipes.addHint">Two ways to add. Write your own recipe in full, or just type the name and approve the recipe we get for you.</p>
+        <p class="hint" data-i18n="recipes.addHint">Two ways to add: write your own recipe in full, or search the library by name.</p>
         <div class="segmented" id="addModeSwitch">
           <button class="seg active" data-addmode="own" data-i18n="recipes.modeOwn">My own recipe</button>
           <button class="seg" data-addmode="name" data-i18n="recipes.modeName">Just the name</button>
         </div>
         <div id="ownWrap">
+          <div class="row"><button id="importLinkBtn" class="pillBtn" data-i18n="import.linkBtn">From a link</button><button id="importPasteBtn" class="pillBtn" data-i18n="import.pasteBtn">Paste the words</button><button id="importFileBtn" class="pillBtn" data-i18n="import.fileBtn">From a file</button><input type="file" id="importRecipeFile" accept=".json,application/json" class="hidden"></div>
+          <div id="importLinkRow" class="hidden">
+            <label><span data-i18n="import.linkLabel">Recipe page link</span><input id="importUrlInput" type="url" placeholder="https://..."></label>
+            <div class="row"><button id="importUrlGo" class="primaryBtn" data-i18n="import.getBtn">Get the recipe</button></div>
+          </div>
+          <div id="importPasteRow" class="hidden">
+            <label><span data-i18n="import.pasteLabel">Paste the recipe words here</span><textarea id="importPasteText" rows="6"></textarea></label>
+            <div class="row"><button id="importPasteGo" class="primaryBtn" data-i18n="import.makeBtn">Make the card</button></div>
+          </div>
           <div class="grid2">
             <label><span data-i18n="recipes.nameLabel">Recipe name</span><input id="ownName" type="text" data-i18n-ph="recipes.namePh" placeholder="Grandma soup"></label>
             <label><span data-i18n="recipes.mealLabel">Meal</span><select id="ownMeal"><option value="breakfast" data-i18n="meal.breakfast">Breakfast</option><option value="lunch" data-i18n="meal.lunch">Lunch</option><option value="dinner" selected data-i18n="meal.dinner">Dinner</option></select></label>
             <label><span data-i18n="recipes.cookTime">Cook time in minutes</span><input id="ownMinutes" type="number" min="1" value="30"></label>
+            <label><span data-i18n="recipes.servingsLabel">Serves (people)</span><input id="ownServings" type="number" min="1" max="12" value="2"></label>
             <label><span data-i18n="recipes.cuisineLabel">Cuisine</span><input id="ownCuisine" type="text" data-i18n-ph="recipes.cuisinePh" placeholder="Mexican"></label>
           </div>
           <label><span data-i18n="recipes.ingredientsLabel">Ingredients, one per line. Start each line with the amount, like 200 g chicken breast</span><textarea id="ownIngredients" rows="5" data-i18n-ph="recipes.ingredientsPh" placeholder="200 g chicken breast"></textarea></label>
@@ -182,7 +192,7 @@
           <div id="ownMsg" class="hint"></div>
         </div>
         <div id="nameWrap" class="hidden">
-          <p class="hint" data-i18n="recipes.nameHint">Type the meal you want, like tacos or butter chicken. We get the recipe, the time and the ingredients. You read it, and only save it if you approve it.</p>
+          <p class="hint" data-i18n="recipes.nameHint">Search the recipe library by name. If nothing matches, add your own recipe details.</p>
           <div class="row"><input id="nameMealInput" type="text" data-i18n-ph="recipes.nameInputPh" placeholder="Type a meal name"><button id="nameMealBtn" class="primaryBtn" data-i18n="recipes.getRecipe">Get the recipe</button></div>
           <div id="nameMealResult"></div>
         </div>
@@ -190,6 +200,21 @@
       <div class="card">
         <h2 data-i18n="recipes.yoursTitle">Your recipes</h2>
         <div id="ownRecipeList"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="recipes.favoritesTitle">Favourites</h2>
+        <div id="favoriteRecipeList" class="recipeGrid"></div>
+      </div>
+      <div class="card recipeMatchCard">
+        <h2 data-i18n="recipes.matchTitle">Find meals from what you have</h2>
+        <p class="hint" data-i18n="recipes.matchHint">Your groceries are selected by default. Add or remove foods to change the matches.</p>
+        <div class="recipeIngredientControls">
+          <label class="recipeIngredientInput"><span data-i18n="recipes.matchInputLabel">Add an ingredient</span><input id="recipeIngredientInput" type="text" maxlength="80" list="recipeIngredientOptions" autocomplete="off" data-i18n-ph="recipes.matchInputPh" placeholder="For example, tomato"></label>
+          <button type="button" id="recipeIngredientAdd" class="miniBtn" data-i18n="recipes.matchAdd">Add food</button>
+        </div>
+        <datalist id="recipeIngredientOptions"></datalist>
+        <div id="recipeIngredientChips" class="chipRow recipeIngredientChips"></div>
+        <button type="button" id="recipeUseGroceries" class="pillBtn" data-i18n="recipes.useGroceries">Use all my groceries</button>
       </div>
       <div class="card">
         <h2 data-i18n="recipes.allTitle">All recipes</h2>
@@ -214,7 +239,7 @@
       </div>
       <div class="card">
         <h2 data-i18n="groc.photoTitle">Photo of your fridge or groceries</h2>
-        <p class="hint" data-i18n="groc.photoHint">Add a photo and the app helps name what is in it. The photo never leaves your device. A photo cannot weigh food, so you confirm each amount before it saves.</p>
+        <p class="hint" data-i18n="groc.photoHint">The on-device food finder makes best guesses and can miss or misname things. Review each suggestion and confirm its amount before adding it. Your photo stays on this device.</p>
         <div class="row"><button id="fridgePhotoBtn" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg> <span data-i18n="appear.choosePhoto">Choose a photo</span></button></div>
         <input id="fridgePhoto" type="file" accept="image/*" class="hidden">
         <div id="photoPreview"></div>
@@ -226,6 +251,7 @@
         <h2 data-i18n="groc.haveTitle">What you have</h2>
         <p class="hint" data-i18n="groc.haveHint">Sorted so the food to use first is at the top.</p>
         <div id="pantryList"></div>
+        <p class="hint" data-i18n="groc.expiryGuide">Best until dates are a standard guide for each food, not a promise. Trust your eyes and nose first.</p>
       </div>
     </section>
 
@@ -233,16 +259,17 @@
       <header class="topBar"><div><h1 data-i18n="nav.list">Grocery List</h1><p class="sub" data-i18n="list.sub">Built from your next 7 days of meals. Add or remove anything.</p></div></header>
       <div class="card">
         <div class="row"><input id="extraName" type="text" data-i18n-ph="list.addPh" placeholder="Add anything, like dish soap"><button id="extraAdd" class="primaryBtn"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> <span data-i18n="common.add">Add</span></button></div>
+        <div class="row"><button id="sendListBtn" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"/></svg> <span data-i18n="list.sendBtn">Send this list</span></button></div>
         <div id="shopList"></div>
       </div>
     </section>
 
     <section id="view-family" class="view">
-      <header class="topBar"><div><h1 data-i18n="nav.family">Family</h1><p class="sub" data-i18n="fam.sub">Each person gets their own colour, tags, dislikes and allergies. Their meal adapts for them. Everyone else gets the normal meal.</p></div></header>
+      <header class="topBar"><div><h1 data-i18n="nav.family">Family</h1><p class="sub" data-i18n="fam.sub">Each person has their own colour, tags, dislikes and allergies. New plans leave out recipes with listed foods for everyone. Check labels and shared equipment for allergies.</p></div></header>
       <div class="card">
         <h2 data-i18n="fam.addTitle">Add a person</h2>
         <div class="grid2">
-          <label><span data-i18n="fam.name">Name</span><input id="fName" type="text" placeholder="Jamie"></label>
+          <label><span data-i18n="fam.name">Name</span><input id="fName" type="text"></label>
           <div><span class="fieldLabel" data-i18n="fam.colour">Colour</span><div id="fColorChips" class="colorChips" role="radiogroup" data-i18n-label="fam.colour" aria-label="Colour"></div></div>
           <label><span data-i18n="fam.tags">Tags, split with commas</span><input id="fTags" type="text" data-i18n-ph="fam.tagsPh" placeholder="Dad, loves spicy"></label>
           <label><span data-i18n="fam.dislikes">Does not like, split with commas</span><input id="fDislikes" type="text" data-i18n-ph="fam.dislikesPh" placeholder="capsicum, mushroom"></label>
@@ -260,6 +287,20 @@
         <h2 data-i18n="prefs.foodLike">Food you like</h2>
         <p class="hint" data-i18n="prefs.foodLikeHint">Tap the food styles you want more of.</p>
         <div id="cuisineChips" class="chipRow"></div>
+        <div class="grid2 recipePrefGrid">
+          <label><span data-i18n="prefs.dietStyle">Diet</span><select id="recipeDiet"><option value="none" data-i18n="prefs.diet.none">No preference</option><option value="vegetarian" data-i18n="prefs.diet.vegetarian">Vegetarian</option><option value="vegan" data-i18n="prefs.diet.vegan">Vegan</option><option value="pescatarian" data-i18n="prefs.diet.pescatarian">Pescatarian</option><option value="dairyFree" data-i18n="prefs.diet.dairyFree">Dairy-free</option><option value="glutenFree" data-i18n="prefs.diet.glutenFree">Avoid common gluten ingredients</option><option value="halalFriendly" data-i18n="prefs.diet.halalFriendly">Halal-friendly (check meat source)</option><option value="kidFriendly" data-i18n="prefs.diet.kidFriendly">Kid-friendly (milder foods)</option></select></label>
+          <label><span data-i18n="prefs.maxCook">Maximum cook time</span><select id="maxCookMinutes"><option value="15">15</option><option value="20">20</option><option value="30">30</option><option value="45">45</option><option value="60">60</option><option value="90">90</option><option value="120">120</option><option value="180">180</option><option value="0" data-i18n="prefs.anyTime">Any time</option></select></label>
+          <label><span data-i18n="prefs.defaultServings">Servings per meal</span><select id="defaultServings"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option><option value="8">8</option><option value="10">10</option><option value="12">12</option></select></label>
+        </div>
+        <h3 data-i18n="prefs.busyTitle">Busy nights</h3>
+        <p class="hint" data-i18n="prefs.busyHint">Tap the nights you get home late or tired. On those nights the planner only picks quick meals.</p>
+        <div id="busyChips" class="chipRow"></div>
+        <div class="grid2">
+          <label><span data-i18n="prefs.quickLabel">Quick means a cook time up to (minutes)</span><select id="quickMinutes"><option value="15">15</option><option value="20">20</option><option value="30">30</option><option value="45">45</option><option value="60">60</option></select></label>
+        </div>
+        <p class="hint" data-i18n="prefs.recipeSafetyHint">These filters use the ingredient names in the recipe. Always check labels and cross-contact for allergies.</p>
+        <p class="hint" data-i18n="prefs.halalNote">Halal-friendly excludes listed pork and alcohol, but check meat certification and every label.</p>
+        <p class="hint" data-i18n="prefs.kidNote">Kid-friendly is a mild-food guide, not a food-safety guarantee.</p>
       </div>
       <div class="card">
         <h2 data-i18n="prefs.eatTimes">Eating times</h2>
@@ -293,8 +334,8 @@
            prices of record (PRICING.md). -->
       <div class="card" id="plansCard">
         <h2 data-i18n="plans.title">Plans</h2>
-        <p class="hint" id="plansStateLine" data-i18n="plans.freeLine">You are on the Free plan. The calendar, the recipes, cooking reminders, your data export and every allergy adaptation stay free in every plan, forever.</p>
-        <p class="hint" data-i18n="plans.plusLine">Meal Prep Plus is A$6.99 a month or A$49.99 a year, and your first month is free. Plus adds profiles for your whole table, the grocery list built from your plan, best until dates on your groceries, fridge photo help, and unlimited plans and your own recipes.</p>
+        <p class="hint" id="plansStateLine" data-i18n="plans.freeLine">You are on the Free plan. The calendar, recipes, cooking reminders and data export are included. Allergy and dislike filters stay free in every plan.</p>
+        <p class="hint" data-i18n="plans.plusLine">Meal Prep Plus is A$6.99 a month or A$49.99 a year, and your first month is free. Plus adds profiles for your whole table, the grocery list built from your plan, best until dates on your groceries, limited fridge photo suggestions to review, and unlimited plans and your own recipes.</p>
         <p class="hint" data-i18n="plans.onSaleLine">Plus is on sale now, and this card is where you start it.</p>
         <p class="hint" data-i18n="plans.familyLine">Meal Prep Family is A$9.99 a month or A$79.99 a year. It comes later, when its extras are built.</p>
       </div>
@@ -349,7 +390,8 @@
       <div class="card">
         <h2 data-i18n="data.title">Your data</h2>
         <div class="row"><button id="exportBtn" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg> <span data-i18n="data.download">Download my data</span></button></div>
-        <p class="hint" data-i18n="data.localLine">Everything is saved on this device only.</p>
+        <p class="hint" data-i18n="data.exportHint">One file with your recipes, plans, lists, groceries and settings.</p>
+        <p class="hint" id="dataLocalLine" data-i18n="data.localLine">Everything is saved on this device only.</p>
         <p class="hint" data-i18n="legal.calorieMethod">Calorie estimates are worked out from USDA FoodData Central values and the recipe amounts. Information only, not medical advice.</p>
         <div class="row"><a href="https://meal-prep-app-tau-sage.vercel.app/privacy.html" target="_blank" rel="noopener" data-i18n="data.privacy">Privacy policy</a></div>
       </div>
@@ -369,7 +411,7 @@
       <header class="topBar"><div><h1 data-i18n="nav.photocal">Photo calories</h1><p class="sub" data-i18n="photocal.sub">Take a photo of food and get a rough calorie count for what the app can see.</p></div></header>
       <div class="card">
         <h2 data-i18n="photocal.cardTitle">Photo of food</h2>
-        <p class="hint" data-i18n="photocal.cardHint">Add a photo of food and the app names what it can see. The photo never leaves your device.</p>
+        <p class="hint" data-i18n="photocal.cardHint">On-device photo suggestions cover only a few common foods and can miss or misname them. Your photo stays on this device.</p>
         <div class="row"><button id="calPhotoBtn" class="pillBtn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg> <span data-i18n="appear.choosePhoto">Choose a photo</span></button></div>
         <input id="calPhoto" type="file" accept="image/*" class="hidden">
         <div id="calPhotoPreview"></div>
@@ -385,6 +427,14 @@
     </section>
   </main>
 </div>
+
+<nav id="bottomNav" class="bottomNav" aria-label="Main tabs">
+  <button type="button" class="bottomNavBtn active" data-view="calendar" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span data-i18n="nav.bottomPlan">Plan</span></button>
+  <button type="button" class="bottomNavBtn" data-view="recipes"><svg class="icon" aria-hidden="true"><use href="#i-chef-hat"/></svg><span data-i18n="nav.recipes">Recipes</span></button>
+  <button type="button" class="bottomNavBtn" data-view="groceries"><svg class="icon" aria-hidden="true"><use href="#i-refrigerator"/></svg><span data-i18n="nav.bottomFridge">Fridge</span></button>
+  <button type="button" class="bottomNavBtn" data-view="list"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"/></svg><span data-i18n="nav.bottomList">List</span></button>
+  <button type="button" class="bottomNavBtn" id="bottomMoreBtn" aria-controls="sidebar" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-panel-left"/></svg><span data-i18n="nav.bottomMore">More</span></button>
+</nav>
 
 <!-- THE DOOR PAGE (app v33, the v4 shape): a signed out user lands on
      a full first page holding only the sign up, big and centred. Step
@@ -448,6 +498,7 @@
   </div>
 </div>
 <div id="toast" class="toast hidden"></div>
+<script src="open-recipes.js"></script>
 <script src="data.js"></script>
 <script src="logic.js"></script>
 <script src="nutrition.js"></script>

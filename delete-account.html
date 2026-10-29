@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delete your account · Meal Prep</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  .delPageWrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+  .delPageHead { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .delPageHead img { width: 40px; height: 40px; }
+  .delPageHead span { font-family: var(--font-head, serif); font-size: 24px; font-weight: 700; }
+  .delPageWrap h1 { margin: 12px 0 8px; }
+  .delPageWrap h2 { margin: 28px 0 8px; }
+  .delPageWrap p { line-height: 1.55; margin: 8px 0; }
+  .delDoors { margin: 12px 0; }
+</style>
+</head>
+<body>
+  <main class="delPageWrap">
+    <div class="delPageHead"><img src="logo.svg" alt="Meal Prep logo"><span>Meal Prep</span></div>
+    <h1>Delete your Meal Prep account</h1>
+    <p>This page is the account deletion page for the Meal Prep app.</p>
+
+    <h2>What deleting means</h2>
+    <p>Deleting is forever. It removes your family, your groceries, your meal plans, your recipes, your lists, your settings and your sign in record. Nothing is kept back, there is no holding period and there is no archive. Once the deletion finishes, the data is gone and nobody can bring it back.</p>
+    <p>One small thing stays, and it is not about you: the anonymous counters your account added to the app totals. They hold counts only, never your name, your email or anything you made.</p>
+    <p>Before you delete, you can download a copy of your data from inside the app. Open Meal Prep, go to Preferences, and tap Download my data.</p>
+
+    <h2>Way one: sign in and delete it yourself</h2>
+    <p>Sign in with the same account you use in the app, confirm it is you, and the same deletion sweep the app uses runs right here. Your sign in record is removed last.</p>
+    <div id="delWebBox"><p>Loading the sign in doors.</p></div>
+
+    <h2>Way two: write to us</h2>
+    <p>If you cannot sign in, write to <a href="mailto:hello@ilseplacencia.shop">hello@ilseplacencia.shop</a> and ask us to delete your account.</p>
+    <p>We check every written request before anything is deleted. Write from the email address on your account, because we check the request against the sign in email on the account. We may also ask you to confirm details that only the account holder would know. Deletion never runs on an unverified request.</p>
+    <p>Once your request is verified, we run the same deletion sweep as way one, and we write back to confirm when it is done.</p>
+  </main>
+  <script src="accounts-config.js"></script>
+  <script src="accounts.js"></script>
+  <script src="auth.js"></script>
+  <script src="delete-account.js"></script>
+</body>
+</html>
+

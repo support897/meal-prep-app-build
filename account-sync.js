@@ -92,6 +92,7 @@
   var entitlement = "free";   /* this session's resolved entitlement */
   var sessionAnchorMs = null; /* the signed in account's Auth creation stamp (app v51); null = the record carried none */
   var pushTimer = null, pushPending = false, adopting = false, deleting = false;
+  var SAVE_DEBOUNCE_MS = 500;
   /* The door page's held state (app v33): which step is showing and
      the email carried from step one to step two. Memory only: the
      typed password lives in its field and nowhere else, and leaving
@@ -107,27 +108,16 @@
 
   /* The signed out Account card (app v33): the sign up itself lives
      on the door page now (renderDoorStep1/2 below); the card keeps a
-     quiet way back to it, plus the demo entries that have always
-     lived here. */
+     quiet way back to it. The demo entries that lived here are gone
+     (the fleet order of 29 Oct 20:57: no demo way to see the app),
+     rendering and handlers both. */
   function renderSignedOut(msg) {
     if (!body) return;
     body.innerHTML =
       "<p class='hint'>" + t("account.signinHint") + "</p>" +
       "<div class='row'><button class='primaryBtn' id='accOpenDoor'>" + t("account.openDoor") + "</button></div>" +
-      "<p class='hint' id='accMsg'>" + esc(msg || "") + "</p>" +
-      "<h3>" + t("account.justLooking") + "</h3>" +
-      "<p class='hint'>" + t("demo.exploreLine") + "</p>" +
-      "<div class='row'><button class='pillBtn' id='accDemo'>" + t("demo.exploreBtn") + "</button></div>" +
-      "<div class='grid2'><label>" + t("demo.codeLabel") + "<input id='accDemoCode' type='text' autocomplete='off' placeholder='" + t("demo.codePh") + "'></label></div>" +
-      "<div class='row'><button class='pillBtn' id='accDemoCodeBtn'>" + t("demo.openWithCode") + "</button></div>";
-    var fail = function (e) { var m = document.getElementById("accMsg"); if (m) m.textContent = " " + demoLineFor(e); };
+      "<p class='hint' id='accMsg'>" + esc(msg || "") + "</p>";
     document.getElementById("accOpenDoor").addEventListener("click", function () { showDoorPage(); });
-    document.getElementById("accDemo").addEventListener("click", function () { enterDemo(null).catch(fail); });
-    document.getElementById("accDemoCodeBtn").addEventListener("click", function () {
-      var code = document.getElementById("accDemoCode").value.trim();
-      if (!code) { fail(new Error(t("demo.typeCode"))); return; }
-      enterDemoCode(code).catch(fail);
-    });
   }
 
   /* ---------------- the door page (app v33, the v4 shape) ----------
@@ -235,11 +225,7 @@
       "<div class='doorDivider'><span>" + t("door.orEmail") + "</span></div>" +
       "<div class='doorField'><label>" + t("door.email") + "<input id='doorEmail' type='email' autocomplete='email' placeholder='" + t("door.emailPh") + "'></label></div>" +
       "<button class='doorNext' id='doorNext' aria-label='" + t("tour.next") + "'>→</button>" +
-      "<p class='doorMsg' id='doorMsg'></p>" +
-      "<div class='doorFoot'>" +
-      "<button class='doorFootLine' id='doorDemoLine'>" + t("door.demoLine") + "</button>" +
-      "</div>" +
-      "<div id='doorDemoBlock'></div>";
+      "<p class='doorMsg' id='doorMsg'></p>";
     document.getElementById("doorGoogle").addEventListener("click", function () { doorSocial("google", this); });
     document.getElementById("doorApple").addEventListener("click", function () { doorSocial("apple", this); });
     var input = document.getElementById("doorEmail");
@@ -258,9 +244,10 @@
        handler both. There is no road past this page except a
        door; the guest pot a person already holds on this device
        is still offered for import after they sign in. The demo
-       line stands (HQ ruling, 21 Oct 17:20): one quiet line at
-       the foot is the review path, not stacked furniture. */
-    document.getElementById("doorDemoLine").addEventListener("click", function () { renderDoorDemo(); });
+       line is gone too (the fleet order of 29 Oct 20:57: no demo
+       way to see the app, always sign up or sign in), rendering
+       and handler both; the demo machinery behind it stands inert
+       with its shipped slot empty, and no screen offers it. */
   }
   function renderDoorStep2() {
     doorStep = 2;
@@ -531,13 +518,15 @@
     var asks = typeof gs.nameAsks === "number" ? gs.nameAsks : 0;
     if (asks >= 2) return;
     var visit = visitId();
+    var tourWillAsk = gs.status === "notStarted" || (gs.status === "inProgress" && gs.step === 1);
     if (asks === 1) {
       if (gs.nameAskVisit === visit) return;
       bumpNameAsks(2, visit);
-      if (window.MP_NAME_ASK) window.MP_NAME_ASK.show();
+      /* When the open tour owns its first stop, let that stop be the
+         second offer too; never stack the quiet pop over it. */
+      if (!tourWillAsk && window.MP_NAME_ASK) window.MP_NAME_ASK.show();
       return;
     }
-    var tourWillAsk = gs.status === "notStarted" || (gs.status === "inProgress" && gs.step === 1);
     /* The first offer counts whichever surface makes it: when the
        tour will show the name stop this session, the tour is the
        first ask (counted here, so the next visit's pop is the one
@@ -856,7 +845,7 @@
        account of every save it ever made. */
     pushPending = true;
     if (pushTimer) clearTimeout(pushTimer);
-    pushTimer = setTimeout(function () { runPush(); }, 2000);
+    pushTimer = setTimeout(function () { pushTimer = null; runPush(); }, SAVE_DEBOUNCE_MS);
   }
   /* The flush (app v61, F-B23-2): a save whose next act destroys
      the page cannot ride the 2 s debounce. The language pick's
@@ -1712,6 +1701,12 @@
 
   function onUser(user) {
     currentUser = user;
+    /* The saved status line in Preferences (29 Oct, item 3): the
+       words follow the truth of the moment. Signed in, the data is
+       backed up to the account and a copy stays on the device;
+       signed out, the device copy is all there is. */
+    var dl = document.getElementById("dataLocalLine");
+    if (dl) dl.textContent = user && !user.isAnonymous ? t("data.backedUpLine", { email: user.email || t("account.yourAccountFallback") }) : t("data.localLine");
     if (!user) {
       /* The adjudication retry dies with the session (app v51),
          and the session anchor goes with it. The census stand
@@ -2299,6 +2294,10 @@
   function signOutFlow() {
     var user = currentUser;
     if (!user) return Promise.resolve();
+    /* The app's local write is debounced too. Land it before this
+       flow snapshots the account or replaces the working copy with
+       the guest state; otherwise a quick sign-out could use stale data. */
+    if (window.MP_APP_HOOK && window.MP_APP_HOOK.flushLocal) window.MP_APP_HOOK.flushLocal();
     var finish = function () {
       return window.MP_AUTH.signOut().then(function () { location.reload(); });
     };

@@ -25,6 +25,28 @@
   function str(x, fallback) { return typeof x === "string" && x !== "" ? x : (fallback || ""); }
   function strList(x) { return Array.isArray(x) ? x.map(function (v) { return String(v == null ? "" : v); }).filter(Boolean) : []; }
   function num(x, fallback) { return (typeof x === "number" && isFinite(x)) ? x : fallback; }
+  function cleanDiet(v) { return ["none", "vegetarian", "vegan", "pescatarian", "dairyFree", "glutenFree", "halalFriendly", "kidFriendly"].indexOf(v) !== -1 ? v : "none"; }
+  function cleanCookMinutes(v) { var n = Number(v); return [0, 15, 20, 30, 45, 60, 90, 120, 180].indexOf(n) !== -1 ? n : 60; }
+  function cleanServings(v) { var n = Math.round(Number(v)); return n >= 1 && n <= 12 ? n : 2; }
+  /* The b32 settings cleaners, written with the same shapes the app
+     cleans with: busy nights are whole weekdays 0 to 6, each once,
+     in order; the quick cap is one of the offered minutes. The
+     cooked and leftover maps keep only the day.meal key shape the
+     app writes. */
+  function cleanBusyNights(v) { var seen = {}, out = []; (Array.isArray(v) ? v : []).forEach(function (x) { var n = Number(x); if (Number.isInteger(n) && n >= 0 && n <= 6 && !seen[n]) { seen[n] = true; out.push(n); } }); return out.sort(function (a, b) { return a - b; }); }
+  function cleanQuickMinutes(v) { var n = Number(v); return [15, 20, 30, 45, 60].indexOf(n) !== -1 ? n : 30; }
+  function cleanCookedMap(v) { var out = {}; if (isPlainObj(v)) Object.keys(v).forEach(function (k) { if (v[k] === true && /^\d{4}\.\d{2}\.\d{2}\.(breakfast|lunch|dinner)$/.test(k)) out[k] = true; }); return out; }
+  function cleanLeftoversMap(v) { var out = {}; if (isPlainObj(v)) Object.keys(v).forEach(function (k) { if (typeof v[k] === "string" && v[k] && /^\d{4}\.\d{2}\.\d{2}\.(breakfast|lunch|dinner)$/.test(k)) out[k] = v[k]; }); return out; }
+  function cleanRecipeIngredients(v) {
+    if (!Array.isArray(v)) return [];
+    var seen = {}, out = [];
+    v.forEach(function (item) {
+      var name = String(item == null ? "" : item).trim().slice(0, 80), key = name.toLowerCase();
+      if (name && !seen[key] && out.length < 50) { seen[key] = true; out.push(name); }
+    });
+    return out;
+  }
+  function cleanFavorites(v) { var seen = {}, out = []; strList(v).forEach(function (id) { if (!seen[id]) { seen[id] = true; out.push(id); } }); return out; }
   /* The reminder settings shapes (app v42). accounts.js stands
      alone, so these mirror logic.js cleanSkips / cleanReminderMode /
      cleanReminderTimes rule for rule; the suite pins the two in
@@ -94,6 +116,7 @@
     if (Array.isArray(s.family) && s.family.length) return true;
     if (Array.isArray(s.pantry) && s.pantry.length) return true;
     if (Array.isArray(s.customRecipes) && s.customRecipes.length) return true;
+    if (Array.isArray(s.favorites) && s.favorites.length) return true;
     if (isPlainObj(s.plan)) {
       return Object.keys(s.plan).some(function (k) { var p = s.plan[k]; return isPlainObj(p) && (p.breakfast || p.lunch || p.dinner); });
     }
@@ -115,6 +138,23 @@
          plan shaped, so the rules profile gate never trips on it. */
       name: str(state.accountName, ""),
       preferences: strList(state.preferences),
+      diet: cleanDiet(state.diet),
+      maxCookMinutes: cleanCookMinutes(state.maxCookMinutes),
+      defaultServings: cleanServings(state.defaultServings),
+      /* The b32 settings ride the profile beside their siblings
+         (QA F-MP32-4): busy nights and the quick cap, and the cooked
+         ticks and leftover links as day.meal maps, the same shape
+         the skips ride in. Before this they never left the phone,
+         so a fresh sign in rebuilt the defaults over the user's
+         picks, the v42 lesson on the new fields. */
+      busyNights: cleanBusyNights(state.busyNights),
+      quickMinutes: cleanQuickMinutes(state.quickMinutes),
+      cooked: cleanCookedMap(state.cooked),
+      leftovers: cleanLeftoversMap(state.leftovers),
+      recipeIngredients: cleanRecipeIngredients(state.recipeIngredients),
+      recipeIngredientsManual: state.recipeIngredientsManual === true,
+      photoTrialUsed: state.photoTrialUsed === true,
+      favorites: cleanFavorites(state.favorites),
       eatTimes: isPlainObj(state.eatTimes) ? { breakfast: str(state.eatTimes.breakfast, "07:30"), lunch: str(state.eatTimes.lunch, "12:30"), dinner: str(state.eatTimes.dinner, "18:30") } : { breakfast: "07:30", lunch: "12:30", dinner: "18:30" },
       setupMinutes: num(state.setupMinutes, 5),
       /* The second reminder offsets (app v35) ride the profile beside
@@ -244,11 +284,22 @@
      -> { state (app shaped, partial-safe), recovered: [...], counts } */
   function docsToState(docs) {
     var recovered = [], counts = { in: 0, kept: 0, recovered: 0 };
-    var state = { accountName: "", preferences: [], eatTimes: { breakfast: "07:30", lunch: "12:30", dinner: "18:30" }, setupMinutes: 5, extraReminders: { breakfast: 0, lunch: 0, dinner: 0 }, reminderMode: { breakfast: "cook", lunch: "cook", dinner: "cook" }, reminderTimes: { breakfast: "", lunch: "", dinner: "" }, skips: {}, stamps: { signedUp: false, activated: false, sessions: 0, lastDay: "" }, planCleared: false, autoPlan: false, guideState: { status: "notStarted", step: 1, v: 2, nameAsks: 0, nameAskVisit: "" }, settings: { background: { kind: "brand", photoMode: "light" }, backgroundPhoto: "" }, family: [], pantry: [], plan: {}, customRecipes: [], extras: [], events: [], imports: [], doneItems: {}, hiddenItems: {} };
+    var state = { accountName: "", preferences: [], diet: "none", maxCookMinutes: 60, defaultServings: 2, busyNights: [], quickMinutes: 30, cooked: {}, leftovers: {}, recipeIngredients: [], recipeIngredientsManual: false, photoTrialUsed: false, favorites: [], eatTimes: { breakfast: "07:30", lunch: "12:30", dinner: "18:30" }, setupMinutes: 5, extraReminders: { breakfast: 0, lunch: 0, dinner: 0 }, reminderMode: { breakfast: "cook", lunch: "cook", dinner: "cook" }, reminderTimes: { breakfast: "", lunch: "", dinner: "" }, skips: {}, stamps: { signedUp: false, activated: false, sessions: 0, lastDay: "" }, planCleared: false, autoPlan: false, guideState: { status: "notStarted", step: 1, v: 2, nameAsks: 0, nameAskVisit: "" }, settings: { background: { kind: "brand", photoMode: "light" }, backgroundPhoto: "" }, family: [], pantry: [], plan: {}, customRecipes: [], extras: [], events: [], imports: [], doneItems: {}, hiddenItems: {} };
     var profile = isPlainObj(docs && docs.profile) ? docs.profile : null;
     if (profile) {
       state.accountName = str(profile.name, "");
       state.preferences = strList(profile.preferences);
+      state.diet = cleanDiet(profile.diet);
+      state.maxCookMinutes = cleanCookMinutes(profile.maxCookMinutes);
+      state.defaultServings = cleanServings(profile.defaultServings);
+      state.busyNights = cleanBusyNights(profile.busyNights);
+      state.quickMinutes = cleanQuickMinutes(profile.quickMinutes);
+      if (isPlainObj(profile.cooked)) state.cooked = cleanCookedMap(profile.cooked);
+      if (isPlainObj(profile.leftovers)) state.leftovers = cleanLeftoversMap(profile.leftovers);
+      state.recipeIngredients = cleanRecipeIngredients(profile.recipeIngredients);
+      state.recipeIngredientsManual = profile.recipeIngredientsManual === true;
+      state.photoTrialUsed = profile.photoTrialUsed === true;
+      state.favorites = cleanFavorites(profile.favorites);
       if (isPlainObj(profile.eatTimes)) { state.eatTimes = { breakfast: str(profile.eatTimes.breakfast, "07:30"), lunch: str(profile.eatTimes.lunch, "12:30"), dinner: str(profile.eatTimes.dinner, "18:30") }; }
       state.setupMinutes = num(profile.setupMinutes, 5);
       if (isPlainObj(profile.extraReminders)) { state.extraReminders = { breakfast: num(profile.extraReminders.breakfast, 0), lunch: num(profile.extraReminders.lunch, 0), dinner: num(profile.extraReminders.dinner, 0) }; }
