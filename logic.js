@@ -509,11 +509,27 @@
     });
     const have = {};
     (pantry || []).forEach(function (p) { have[norm(p.name)] = p; });
+    /* The same name in its other number still covers (QA b33, F31):
+       a pantry holding "eggs" covers a list line asking for "egg".
+       The exact name keeps first claim; the singularised form,
+       the matcher's own shape, only answers when the exact name
+       misses, so no standing behaviour moves. */
+    const haveByForm = {};
+    (pantry || []).forEach(function (p) { const f = matchFoodText(p.name); if (f && !haveByForm[f]) haveByForm[f] = p; });
+    /* The whole-food form word still covers (QA b33r, drive 6,
+       the desk's ruling): a list line asking for "Whole egg" is
+       the stocked food "eggs" under a form word, so the bare
+       form answers too, on both sides. A PART of the food is
+       not a form of its name — "Egg yolks" never covers from
+       whole eggs, and nothing here strips any word but the
+       leading whole. */
+    (pantry || []).forEach(function (p) { const f = matchFoodText(p.name); const bare = f ? f.replace(/^whole /, "") : f; if (bare && bare !== f && !haveByForm[bare]) haveByForm[bare] = p; });
     const back = backOnList || {};
     const buy = [], atHome = [];
     Object.keys(need).forEach(function (k) {
       const item = need[k];
-      const stocked = have[norm(item.name)];
+      const form = matchFoodText(item.name);
+      const stocked = have[norm(item.name)] || haveByForm[form] || haveByForm[form ? form.replace(/^whole /, "") : form];
       item.haveIt = !!stocked;
       item.qty = Math.round(item.qty * 10) / 10;
       const putBack = !!back[item.name + "|" + item.unit];
@@ -794,17 +810,71 @@
     const nameAskVisit = (obj && typeof obj.nameAskVisit === "string") ? obj.nameAskVisit : "";
     let step = (obj && typeof obj.step === "number" && isFinite(obj.step)) ? Math.round(obj.step) : 1;
     const status = obj ? obj.status : undefined;
-    if (status === "done") return { status: "done", step: 8, v: 2, nameAsks: nameAsks, nameAskVisit: nameAskVisit };
+    /* stopDrawn: the account's own witness that the tour's name
+       stop has rendered in some page life (QA b33r, drive 4's
+       reconciliation). Carried verbatim; a record without it
+       reads false, which is the legacy truth. */
+    const stopDrawn = !!(obj && obj.stopDrawn === true);
+    if (status === "done") return { status: "done", step: 8, v: 2, nameAsks: nameAsks, nameAskVisit: nameAskVisit, stopDrawn: stopDrawn };
     if (status === "skipped" || status === "inProgress") {
       if (!obj || obj.v !== 2) step = GUIDE_STEP_FROM_OLD[Math.min(6, Math.max(1, step))] || 1;
       if (step < 1) step = 1;
       if (step > 8) step = 8;
-      return { status: status, step: step, v: 2, nameAsks: nameAsks, nameAskVisit: nameAskVisit };
+      return { status: status, step: step, v: 2, nameAsks: nameAsks, nameAskVisit: nameAskVisit, stopDrawn: stopDrawn };
     }
-    if (onboarded || hasData) return { status: "done", step: 8, v: 2, nameAsks: nameAsks, nameAskVisit: nameAskVisit };
+    if (onboarded || hasData) return { status: "done", step: 8, v: 2, nameAsks: nameAsks, nameAskVisit: nameAskVisit, stopDrawn: stopDrawn };
     if (step < 1) step = 1;
     if (step > 8) step = 8;
-    return { status: "notStarted", step: step, v: 2, nameAsks: nameAsks, nameAskVisit: nameAskVisit };
+    return { status: "notStarted", step: step, v: 2, nameAsks: nameAsks, nameAskVisit: nameAskVisit, stopDrawn: stopDrawn };
+  }
+  /* First-encounter moments (build 33, the guide research round):
+     one Mina moment per view, shown once, never after the user has
+     done the thing the moment teaches. guideSeen records which
+     moments have landed, per view, and rides the account profile
+     like guideState does, so a second device does not re-teach.
+     Only the known view keys survive the repair; only a true flag
+     counts. Repairs clamp, never drop. */
+  const GUIDE_MOMENT_VIEWS = ["groceries", "list", "photocal", "family", "reminders", "recipes", "cook"];
+  function cleanGuideSeen(x) {
+    const out = {};
+    if (!x || typeof x !== "object" || Array.isArray(x)) return out;
+    for (let i = 0; i < GUIDE_MOMENT_VIEWS.length; i++) if (x[GUIDE_MOMENT_VIEWS[i]] === true) out[GUIDE_MOMENT_VIEWS[i]] = true;
+    return out;
+  }
+  /* The Getting started checklist (build 33): seven real actions,
+     ticked BY DOING, read off the state by this one pure function so
+     the checklist, the suite and any future surface agree. The list
+     view tick needs the encounter bookkeeping, so it reads
+     guideSeen as well as the plan: the list is "seen built" once
+     the user has opened it while a meal stood planned. */
+  function guideChecklist(s) {
+    const st = (s && typeof s === "object") ? s : {};
+    const family = Array.isArray(st.family) ? st.family : [];
+    const pantry = Array.isArray(st.pantry) ? st.pantry : [];
+    const prefs = Array.isArray(st.preferences) ? st.preferences : [];
+    let planned = false;
+    if (st.plan && typeof st.plan === "object") {
+      const keys = Object.keys(st.plan);
+      for (let i = 0; i < keys.length; i++) { const d = st.plan[keys[i]]; if (d && (d.breakfast || d.lunch || d.dinner)) { planned = true; break; } }
+    }
+    const seen = cleanGuideSeen(st.guideSeen);
+    /* The table rows read as their words say (QA b33, B16-B20):
+       "Add yourself to the table" is done once the holder stands at
+       their own table — their name is known, or a first person
+       stands — and "Add someone to your table" is done the moment
+       one someone stands there. The family list holds the other
+       people, never the holder, so one standing person ticks both
+       rows honestly. */
+    const holderKnown = typeof st.accountName === "string" && st.accountName.trim() !== "";
+    return [
+      { id: "table", done: holderKnown || family.length >= 1 },
+      { id: "styles", done: prefs.length > 0 },
+      { id: "plan", done: planned },
+      { id: "list", done: !!(planned && seen.list) },
+      { id: "fridge", done: pantry.length > 0 },
+      { id: "person", done: family.length >= 1 },
+      { id: "reminders", done: st.notifications === "granted" }
+    ];
   }
   /* Does this saved state hold anything the user put there? A person, a
      pantry item, any planned meal, or a recipe of their own. Settings and
@@ -848,6 +918,7 @@
       plan: {}, planCleared: false, customRecipes: [], favorites: [], extras: [], events: [], imports: [], doneItems: {}, hiddenItems: {}, atHomeBack: {}, sentReminders: {},
       navTucked: [],
       guideState: { status: "notStarted", step: 1, v: 2, nameAsks: 0, nameAskVisit: "" },
+      guideSeen: {},
       accountName: "",
       autoPlan: false,
       settings: { background: { kind: "brand", photoMode: "light" }, backgroundPhoto: "", language: "auto" },
@@ -908,7 +979,39 @@
       return { key: r.key, source: String(r.source || "calendar"), at: String(r.at || ""), count: Math.max(0, Math.round(+r.count) || 0) };
     });
   }
-  const API = { shelfLookup: shelfLookup, shelfKnown: shelfKnown, shelfDays: shelfDays, expiryFor: expiryFor, daysLeft: daysLeft, sortByExpiry: sortByExpiry, personConflicts: personConflicts, recipeDietConflicts: recipeDietConflicts, recipeAllowed: recipeAllowed, scaleRecipe: scaleRecipe, cleanDiet: cleanDiet, cleanCookMinutes: cleanCookMinutes, cleanServings: cleanServings, cleanRecipeIngredients: cleanRecipeIngredients, matchIngredientNames: matchIngredientNames, recipeMatch: recipeMatch, rankRecipes: rankRecipes, swapFor: swapFor, adaptations: adaptations, recipeScore: recipeScore, recipeUsesExpiring: recipeUsesExpiring, EXPIRING_TIER: EXPIRING_TIER, pickRecipe: pickRecipe, planCtxForDay: planCtxForDay, cleanBusyNights: cleanBusyNights, cleanQuickMinutes: cleanQuickMinutes, dateKey: dateKey, parseKey: parseKey, buildPlan: buildPlan, reminderTime: reminderTime, extraReminderTime: extraReminderTime, formatTime: formatTime, cleanSkips: cleanSkips, cleanReminderMode: cleanReminderMode, cleanReminderTimes: cleanReminderTimes, reminderSchedule: reminderSchedule, expirySchedule: expirySchedule, applyCooked: applyCooked, buildGroceryList: buildGroceryList, findRecipeByName: findRecipeByName, makeRecipeFromName: makeRecipeFromName, recipeKcal: recipeKcal, photoKcal: photoKcal, fridgeKcal: fridgeKcal, ingredientGrams: ingredientGrams, NAV_GROUPS: NAV_GROUPS, navGroupForView: navGroupForView, cleanTucked: cleanTucked, canTuckGroup: canTuckGroup, BG_KINDS: BG_KINDS, cleanBackgroundKind: cleanBackgroundKind, cleanBackgroundPhoto: cleanBackgroundPhoto, cleanBackgroundSettings: cleanBackgroundSettings, LANG_CHOICES: LANG_CHOICES, cleanLanguageChoice: cleanLanguageChoice, PERSON_COLORS: PERSON_COLORS, OLD_PERSON_COLOR_MAP: OLD_PERSON_COLOR_MAP, mapPersonColor: mapPersonColor, GUIDE_STATUSES: GUIDE_STATUSES, cleanGuideState: cleanGuideState, stateHasUserData: stateHasUserData, blankState: blankState, removeAt: removeAt, restoreAt: restoreAt, cleanEvents: cleanEvents, cleanImports: cleanImports };
+  /* Cooking reels (build 33): one library picture per recipe step.
+     The library holds four pictures of Mina — wash, chop, stir, serve —
+     reused across every recipe. A step takes the first family (in the
+     order wash, chop, stir, serve) whose words it carries; a step with
+     no family word takes the stir picture (the fallback); a recipe's
+     last step takes the serve picture unless it matched wash or chop.
+     Pure and word-only: it reads step text, nothing else. */
+  const REEL_FAMILIES = [
+    ["wash", ["wash", "rinse", "soak", "scrub", "peel", "pat dry"]],
+    ["chop", ["chop", "dice", "slice", "mince", "cut", "grate", "crush", "quarter", "halve"]],
+    ["stir", ["stir", "mix", "whisk", "fold", "toss", "combine", "mash", "blend", "season", "sprinkle", "scatter", "drizzle", "spread", "add", "top"]],
+    ["serve", ["serve", "eat", "enjoy", "plate"]]
+  ];
+  function reelFamilyOf(step) {
+    const s = " " + String(step || "").toLowerCase() + " ";
+    for (let f = 0; f < REEL_FAMILIES.length; f++) {
+      const words = REEL_FAMILIES[f][1];
+      for (let w = 0; w < words.length; w++) {
+        if (new RegExp("\\b" + words[w]).test(s)) return REEL_FAMILIES[f][0];
+      }
+    }
+    return "";
+  }
+  function reelPicFor(step, isLast) {
+    const fam = reelFamilyOf(step);
+    if (isLast) return (fam === "wash" || fam === "chop") ? fam : "serve";
+    return fam || "stir";
+  }
+  function reelPics(steps) {
+    const list = Array.isArray(steps) ? steps : [];
+    return list.map(function (s, ix) { return reelPicFor(s, ix === list.length - 1); });
+  }
+  const API = { shelfLookup: shelfLookup, shelfKnown: shelfKnown, shelfDays: shelfDays, expiryFor: expiryFor, daysLeft: daysLeft, sortByExpiry: sortByExpiry, personConflicts: personConflicts, recipeDietConflicts: recipeDietConflicts, recipeAllowed: recipeAllowed, scaleRecipe: scaleRecipe, cleanDiet: cleanDiet, cleanCookMinutes: cleanCookMinutes, cleanServings: cleanServings, cleanRecipeIngredients: cleanRecipeIngredients, matchIngredientNames: matchIngredientNames, recipeMatch: recipeMatch, rankRecipes: rankRecipes, swapFor: swapFor, adaptations: adaptations, recipeScore: recipeScore, recipeUsesExpiring: recipeUsesExpiring, EXPIRING_TIER: EXPIRING_TIER, pickRecipe: pickRecipe, planCtxForDay: planCtxForDay, cleanBusyNights: cleanBusyNights, cleanQuickMinutes: cleanQuickMinutes, dateKey: dateKey, parseKey: parseKey, buildPlan: buildPlan, reminderTime: reminderTime, extraReminderTime: extraReminderTime, formatTime: formatTime, cleanSkips: cleanSkips, cleanReminderMode: cleanReminderMode, cleanReminderTimes: cleanReminderTimes, reminderSchedule: reminderSchedule, expirySchedule: expirySchedule, applyCooked: applyCooked, buildGroceryList: buildGroceryList, findRecipeByName: findRecipeByName, makeRecipeFromName: makeRecipeFromName, recipeKcal: recipeKcal, photoKcal: photoKcal, fridgeKcal: fridgeKcal, ingredientGrams: ingredientGrams, NAV_GROUPS: NAV_GROUPS, navGroupForView: navGroupForView, cleanTucked: cleanTucked, canTuckGroup: canTuckGroup, BG_KINDS: BG_KINDS, cleanBackgroundKind: cleanBackgroundKind, cleanBackgroundPhoto: cleanBackgroundPhoto, cleanBackgroundSettings: cleanBackgroundSettings, LANG_CHOICES: LANG_CHOICES, cleanLanguageChoice: cleanLanguageChoice, PERSON_COLORS: PERSON_COLORS, OLD_PERSON_COLOR_MAP: OLD_PERSON_COLOR_MAP, mapPersonColor: mapPersonColor, GUIDE_STATUSES: GUIDE_STATUSES, cleanGuideState: cleanGuideState, GUIDE_MOMENT_VIEWS: GUIDE_MOMENT_VIEWS, cleanGuideSeen: cleanGuideSeen, guideChecklist: guideChecklist, stateHasUserData: stateHasUserData, blankState: blankState, removeAt: removeAt, restoreAt: restoreAt, cleanEvents: cleanEvents, cleanImports: cleanImports, REEL_FAMILIES: REEL_FAMILIES, reelFamilyOf: reelFamilyOf, reelPicFor: reelPicFor, reelPics: reelPics };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   global.MP_LOGIC = API;
 })(typeof window !== "undefined" ? window : globalThis);

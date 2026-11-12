@@ -25,6 +25,14 @@
 (function (global) {
   "use strict";
   var config = {
+    /* THE PLANS SWITCH (Ilse's ruling, 2 Nov): plansOn is false, so
+       the shipped app is all free: no paywall, no plan gates, every
+       feature open to every user. The plans, prices and billing
+       machinery below and in payments.js stay saved in the tree,
+       switched off here at the one named place, because she will
+       use them later, not now. Turning plans back on is setting
+       this to true; nothing else needs to move. */
+    plansOn: false,
     /* The subscription brain's public SDK key (RevenueCat is the one
        brain, Ilse's rails ruling 15 Oct: Apple IAP + Google Play
        Billing inside the apps, Stripe on the web, RevenueCat over

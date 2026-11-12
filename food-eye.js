@@ -32,12 +32,22 @@ async function tiles(hf, src, grids) {
   }
   return out;
 }
-/* Returns [{ name, score, rank }] best first (up to 20). */
-export async function findFoods(src, progress, grids) {
+/* Returns [{ name, score, rank }] best first (up to 20).
+   The optional deadline (build 33 fix round, QA b33 E27): the
+   caller's own bound races a timer, and a long stretch of model
+   work can starve that timer — in QA's lane the answer landed at
+   188 seconds against the section's 180 second bound. The tile
+   loop already yields between tiles, so it now checks the
+   deadline itself at each yield and stops there, returning the
+   ranking from the tiles it finished: the section's wait ends at
+   its bound plus one tile, with honest partial finds instead of
+   a late all-or-nothing. */
+export async function findFoods(src, progress, grids, deadline) {
   const m = await load(progress);
   const keys = m.labels.keys, raw = {};
   for (const t of await tiles(m.hf, src, grids || [2, 3, 4])) {
     await new Promise(function (r) { const c = new MessageChannel(); c.port1.onmessage = r; c.port2.postMessage(0); });
+    if (deadline && Date.now() > deadline) break;
     const o = await m.vm(await m.proc(t));
     const e = norm(o.image_embeds.data);
     const lg = m.labels.emb.map(function (l) { let s = 0; for (let i = 0; i < e.length; i++) s += l[i] * e[i]; return 100 * s; });

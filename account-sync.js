@@ -827,9 +827,47 @@
      and advances the snapshot identically by either road. It
      resolves in every arm, so a caller waiting on it is never
      trapped by an empty state or a lost user. */
+  /* The pre-landing baseline (build 33 fix round, QA b33
+     Finding 1; the v57 F1-B drive's reloaded boot): a save that
+     fires before this page life's first landing has no pulled
+     baseline to compose against, and composing against none
+     writes the whole standing state as a create — resurrecting
+     on the server anything another device deleted, whose only
+     crime was standing in the device copies. When the account's
+     own cache stands (it is the last landed state this device
+     holds), the baseline seeds from it: the session's genuine
+     edits still diff and write, held content writes nothing,
+     and the first landing re-bases against the server's truth
+     as it always has. No cache, no seed — the create-shaped
+     composition is then the only road, as on a first-ever
+     session, whose create roads own their baselines. */
+  function seedBaselineFromCache(uid) {
+    if (snapshot) return;
+    try {
+      var raw = storage.get(A.cacheKeyFor(uid));
+      var c = raw ? JSON.parse(raw) : null;
+      if (c && typeof c === "object" && !Array.isArray(c)) { var d = A.stateToDocs(c); if (d) snapshot = d; }
+    } catch (e) {}
+  }
   function runPush() {
+    /* No push composes while a landing is in flight (build 33 fix
+       round, QA b33 Finding 1; rig S5): a timer armed before the
+       landing used to fire this body inside the landing window,
+       where the snapshot had just been set to the pulled documents
+       while the standing state already carried the landing's
+       tombstones and reconciliations — the one pairing that writes
+       emptiness over real server records. flushPush and
+       schedulePush already refuse the window; the push body now
+       refuses it too, deferring itself until the landing settles
+       (the pending flag stands, so the deferred push still runs). */
+    if (adopting || deleting) {
+      if (pushTimer) clearTimeout(pushTimer);
+      pushTimer = setTimeout(function () { pushTimer = null; runPush(); }, 600);
+      return Promise.resolve();
+    }
     var st = liveState();
     if (!st || !currentUser) { pushPending = false; return Promise.resolve(); }
+    seedBaselineFromCache(currentUser.uid);
     var uid = currentUser.uid;
     return storePromise.then(function (store) {
       return A.pushAccount(store, uid, st, snapshot, nowIso());
@@ -1153,9 +1191,18 @@
   function withTombstones(uid, landedState, pulledState) {
     if (!landedState || typeof landedState !== "object") return landedState;
     if (!landedState.plan || typeof landedState.plan !== "object" || Array.isArray(landedState.plan)) landedState.plan = {};
+    /* Build 33 fix round (QA b33, Finding 1; rig S5): the held days
+       are read from THIS ACCOUNT'S OWN cache only. The working copy
+       standing at a first sign-in landing is not evidence about this
+       account: on a shared device it can be another account's state
+       outright (the rig's foreign-copy drive tombstoned a stranger's
+       whole month into the landing), and before any sign-in it is
+       the guest pot, whose days are pre-door work for the import
+       offer, never this account's deletions. The account's own held
+       days always stand in its cache at a landing — its sign-out
+       wrote the copy there and every landing refreshes it — so the
+       cure's own-device roads lose nothing by the narrowing. */
     var held = {};
-    var live = liveState();
-    if (live && live.plan && typeof live.plan === "object" && !Array.isArray(live.plan)) Object.keys(live.plan).forEach(function (day) { held[day] = true; });
     try {
       var rawC = storage.get(A.cacheKeyFor(uid));
       var cached = rawC ? JSON.parse(rawC) : null;
@@ -1329,18 +1376,36 @@
     WAIT.bound(storePromise.then(function (store) { return A.pullAccount(store, uid, { source: "server" }); }), 30000).then(function (docs) {
       if (A.adjudicatePull(docs, pullProof(currentUser)) === "notLoaded") return;
       if (JSON.stringify(docs) !== JSON.stringify(snapshot)) {
-        snapshot = docs;
-        var pulledState = A.docsToState(docs).state;
-        /* App v57 (the F-B19-1 cure): this landing too gains
-           its tombstones, the owner's adoption, and the
-           deferral-gated reload — it writes the live key like
-           every other landing, so it carries the same three
-           obligations. */
-        withTombstones(uid, pulledState, pulledState);
-        setLive(pulledState);
-        storage.set(A.cacheKeyFor(uid), JSON.stringify(pulledState));
-        ownerAdopt(pulledState);
-        reloadAfterLanding();
+        /* Build 33 fix round, second arm (QA b33r retest, drive
+           1; desk rig S7): this landing used to write the pulled
+           state RAW — no loss-direction test, no reconcile — with
+           tombstones emptied over it and the baseline set to the
+           raw pulled docs. The adjudication above cannot see the
+           shape that convicts it: the census counts the bag's
+           DOCUMENTS against the cache's CONTENT days, so a bag
+           carrying the month's empty render-day docs and none of
+           its filled ones (a strangled seeding: the small writes
+           landed, the fill's writes died) judges LOADED while
+           carrying nothing — and the raw landing then emptied
+           the planner in the live copy, the cache, and, through
+           the follow-on push against the raw baseline, the
+           server record itself. QA's retest read it exactly:
+           fridge whole (the bag carried it), planner gone after
+           the settle, still gone on relaunch. Every other
+           landing in this engine loss-tests and reconciles
+           through convergeLive; this one now does the same. A
+           content-partial answer declines there (the pulled
+           state's own content census is poorer than the live
+           copy's), the session keeps its truth, and the baseline
+           advances only when a landing actually happened — the
+           live key changing under the call is the landing's own
+           receipt. The reload keeps its deferral gate. */
+        var liveBefore = storage.get(A.LIVE_KEY);
+        convergeLive(currentUser, docs, {});
+        if (storage.get(A.LIVE_KEY) !== liveBefore) {
+          snapshot = docs;
+          reloadAfterLanding();
+        }
       }
     }, function (e) {
       /* Every refusal of the refresh pull takes the treatment
@@ -1367,14 +1432,28 @@
        reconcileWithCache): the live key and the cache take the
        pulled state carrying anything the device's cached copy
        holds that the pull lacks, while the snapshot above stays
-       the pulled documents alone. A census stand trip (app v55,
-       Cure F1) lands UNRECONCILED instead: reconciliation is
-       precisely what would carry the honourably deleted item
-       back in, so the pulled state lands as it stands — and the
-       cache write below stores that same pulled state, which
-       refreshes the stash to the server's truth and ends the
-       deadlock for that deletion. */
-    var landedState = (opts && opts.suppressReconcile) ? pulled.state : reconcileWithCache(user.uid, pulled.state);
+       the pulled documents alone.
+       Build 33 fix round (QA b33, Finding 1; rig S6): a census
+       stand trip (app v55, Cure F1) used to land UNRECONCILED on
+       this road too, on the theory that the pulled state was the
+       server's truth and reconciliation would carry an
+       honourably deleted item back in. The b33 verdict and the
+       desk's rig convict that landing: the stand trips precisely
+       when the engine has judged the pull NOT LOADED four times
+       running, and a pull in that state cannot tell an item
+       deleted elsewhere from an item whose own push never landed
+       through a strangled channel — the unreconciled landing
+       overwrote the cache, destroying the only copies of the
+       never-written items, and the account's fridge read eggs
+       only from then on. The trip keeps its door (the adoption
+       proceeds, the retry loop ends); the landed state now
+       reconciles like every other adoption, so a distrusted pull
+       can no longer execute device-held work. An item genuinely
+       deleted elsewhere may stand on this device until a trusted
+       pull's census agrees — the safe direction under the
+       saved-data law, and the standing behaviour of every
+       non-trip landing in this engine. */
+    var landedState = reconcileWithCache(user.uid, pulled.state);
     /* App v57 (the F-B19-1 cure): the landed state gains its
        tombstones (clause 2 — on the reconciled road they mark
        the days the cache holds that neither the pull nor the
@@ -1388,6 +1467,41 @@
        withTombstones still sees it too: nothing has written
        the live key yet. */
     withTombstones(user.uid, landedState, pulled.state);
+    /* Build 33 fix round (QA b33, Finding 1; rig S5): the snapshot
+       keeps the pulled documents, EXCEPT at the tombstone keys,
+       where it takes the landed empty day. A tombstone is this
+       device honouring a deletion: it must render empty and it
+       must stop the auto-fill, and both of those are local. Left
+       paired against the pulled document (which may hold the
+       day's real meals — a wedged pull's miss manufactures
+       tombstones wholesale), the first push after the landing
+       wrote the empty day OVER the server's record and the miss
+       became permanent truth, census-sealed on every later
+       relaunch. With the baseline carrying the empty day at
+       those keys, the push has nothing to write there; the
+       server keeps its record until a trusted pull or a real
+       edit speaks, and a deletion genuinely made elsewhere is
+       already absent from the server, owed nothing. Carried real
+       days (held in the cache, landed with their meals, absent
+       from the pulled bag) keep their absence from the snapshot,
+       so they still sync up at the first push, exactly as
+       Cure 1 intended. */
+    (function () {
+      var bag = (docs.collections && docs.collections.planDays) || {};
+      var clonedBag = null;
+      Object.keys(landedState.plan || {}).forEach(function (day) {
+        var d = landedState.plan[day];
+        var isTombstone = d && typeof d === "object" && !Array.isArray(d) && Object.keys(d).length === 0 && !(day in (pulled.state.plan || {}));
+        if (!isTombstone) return;
+        if (!clonedBag) { clonedBag = Object.assign({}, bag); }
+        clonedBag[day] = {};
+      });
+      if (clonedBag) {
+        var collections = Object.assign({}, docs.collections);
+        collections.planDays = clonedBag;
+        snapshot = { profile: docs.profile, collections: collections };
+      }
+    })();
     setLive(landedState);
     storage.set(A.cacheKeyFor(user.uid), JSON.stringify(landedState));
     device.uid = user.uid; device.adoptedUid = user.uid; saveDevice();
@@ -1793,18 +1907,30 @@
      call sites.) */
   function convergeLive(user, docs, opts) {
     var pulledState = A.docsToState(docs).state;
-    /* A census stand trip (app v55, Cure F1) lands the pulled
-       truth UNCONDITIONALLY and unreconciled: the loss
-       direction test below guards a working copy that may hold
-       the person's newer truth, but a never-landed stand's live
-       copy is the signed out or local one — the server's truth
-       is canonical for this landing — and reconciliation would
-       carry the honourably deleted item back in. The setLive
-       and the cache write are the landing's own, so snapshot,
-       live and stash agree on the pulled documents and the
-       deadlock cannot re-form for that deletion. */
+    /* A census stand trip (app v55, Cure F1) lands past the loss
+       direction test below, unconditionally: a never-landed
+       stand's live copy is the signed out or local one, and the
+       landing is what ends the retry deadlock at the door.
+       Build 33 fix round (QA b33, Finding 1; rig S6): the trip
+       used to land the pulled state UNRECONCILED, and the cache
+       write below stored that same pulled state. The b33
+       verdict convicts the shape: the stand trips on a pull the
+       adjudication itself judged not loaded four times, and
+       such a pull cannot tell an item deleted elsewhere from an
+       item whose push never landed — the unreconciled landing
+       and its cache write destroyed the only copies of the
+       never-written work (the account's fridge, held in the
+       cache alone, read eggs only from then on, on every later
+       device too). The trip landing now reconciles with the
+       account's own cache like every other landing in this
+       engine; the stand still trips, the door still completes,
+       and the caller's baseline still derives from the landed
+       state (Clause A), so snapshot, live and stash agree on
+       what landed. A genuinely deleted item may stand locally
+       until a trusted pull — the safe direction under the
+       saved-data law. */
     if (opts && opts.suppressReconcile) {
-      /* App v57 (the F-B19-1 cure): the pulled state gains its
+      /* App v57 (the F-B19-1 cure): the landed state gains its
          tombstones and is adopted by the state owner before it
          lands — on the shipped build this landing wrote the
          stored copies alone, and the resolution tail's own
@@ -1812,11 +1938,12 @@
          memory over them, so the trip's first later push
          carried the deleted day back to the server (QA's
          build 19 retest, leg (b)). */
-      withTombstones(user.uid, pulledState, pulledState);
-      setLive(pulledState);
-      try { storage.set(A.cacheKeyFor(user.uid), JSON.stringify(pulledState)); } catch (e) {}
-      ownerAdopt(pulledState);
-      return pulledState;
+      var tripLanded = reconcileWithCache(user.uid, pulledState);
+      withTombstones(user.uid, tripLanded, pulledState);
+      setLive(tripLanded);
+      try { storage.set(A.cacheKeyFor(user.uid), JSON.stringify(tripLanded)); } catch (e) {}
+      ownerAdopt(tripLanded);
+      return tripLanded;
     }
     var live = liveState();
     var want = stateCounts(pulledState);
@@ -1948,8 +2075,30 @@
            carry's source — the baseline it returns is
            field-complete at the profile, the seven
            server-managed fields riding from the pull's
-           own profile; see baselineFrom.) */
-        snapshot = baselineFrom(convergeLive(currentUser, docs2), docs2);
+           own profile; see baselineFrom.)
+           Build 33 fix round, second arm (QA b33r retest,
+           drive 1; desk rig S7): REVERSED, in the open, with
+           the v58 reasoning answered on its own terms. The
+           same-copy baseline strands whatever the landing
+           reconciled in from the device copies: content the
+           server lacks is treated as already held there, so
+           no push ever carries it up — a month filled on a
+           strangled channel stood whole on the device while
+           the server record never received it, and the cold
+           profile read (the drive's decider) read the record
+           reduced forever. The commission's saved-data law
+           is explicit — everything entered is saved on the
+           server record — and it outranks the deletion
+           honour: a deletion another device's standing copy
+           composes back can be deleted again by its owner,
+           in the open; data stranded off the server is
+           invisible and dies with the device copy. The
+           baseline is the pulled documents again: what the
+           server provably held at the landing; everything
+           the device holds beyond it is owed to the server
+           and syncs at the next push. */
+        convergeLive(currentUser, docs2);
+        snapshot = docs2;
       }, function () {});
     }, CONVERGENCE_RECHECK_MS);
   }
@@ -2066,8 +2215,21 @@
              on the heal continuation above, docs IS the
              created documents, so the heal's own stamps
              enter the baseline by this same line; see
-             baselineFrom.) */
-          snapshot = baselineFrom(convergeLive(user, docs, censusTripped ? { suppressReconcile: true } : undefined), docs);
+             baselineFrom.)
+             Build 33 fix round, second arm (QA b33r retest,
+             drive 1; desk rig S7): the baseline-from-landed
+             assignment is REVERSED here too, for the reason
+             written out at the re-check's assignment above:
+             a same-copy baseline strands device-held content
+             off the server record permanently, and the
+             commission's saved-data law outranks the
+             deletion honour it bought. The convergence
+             lands (reconciled, as it stands), and the
+             baseline is the pulled documents: the next push
+             owes the server everything the device holds
+             beyond them. */
+          convergeLive(user, docs, censusTripped ? { suppressReconcile: true } : undefined);
+          snapshot = docs;
           return A.syncTier(store, user.uid, { demo: false, source: "server" });
         }).then(function (t) {
           if (t) {

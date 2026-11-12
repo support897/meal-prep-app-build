@@ -389,6 +389,22 @@ body[data-photo-mode="dark"] #bgVeil { background: #241812; opacity: 0.89; }
 .guideTop { display: flex; align-items: flex-start; gap: 14px; }
 .minaPose { width: 104px; height: auto; flex: none; }
 .guideBubble { background: var(--soft); color: var(--ink); border-radius: 14px; padding: 10px 14px; font-family: "Fraunces", serif; font-weight: 700; font-size: 17px; line-height: 1.3; margin-top: 10px; }
+/* Build 33: Mina's moments beyond the tour (first encounters, the
+   return greeting, the what's-changed card, the checklist's earned
+   celebrate). One card shape for all of them: Mina at the side,
+   the words carrying the content, the actions in one row. */
+.guideMoment { display: flex; gap: 12px; align-items: flex-start; }
+.guideMomentPose { width: 56px; height: 56px; flex: 0 0 auto; }
+.guideMomentBody { flex: 1 1 auto; }
+.guideMomentBody p { margin: 2px 0 8px; }
+.guideCookMoment { margin: 10px 0; padding: 10px 12px; background: var(--soft); border-radius: 14px; }
+.guideCheckTitle { margin: 14px 0 6px; }
+.checkRow { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 4px; background: none; border: none; font: inherit; color: var(--ink); }
+button.checkRow { cursor: pointer; }
+.checkTick { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--basil, #4C7A3F); color: #fff; font-size: 14px; flex: 0 0 auto; }
+.checkBox { display: inline-block; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line, #d8cfc2); flex: 0 0 auto; }
+.checkRow.done { opacity: 0.75; }
+.guideCheckDone { margin-top: 10px; padding: 10px 12px; background: var(--soft); border-radius: 14px; }
 .guideX { margin-left: auto; flex: none; }
 .guideLine { font-size: 16px; line-height: 1.45; margin: 14px 0 6px; }
 .guideControl { margin-top: 8px; }
@@ -484,3 +500,23 @@ body.demoOn::before { content: "Demo"; position: fixed; top: 10px; top: calc(10p
 .timerChip.timerDone { background: #4C7A3F; border-color: #4C7A3F; color: #FFF7EA; }
 .cookIng { margin: 10px 0 16px; }
 .cookIng summary { cursor: pointer; font-weight: 700; margin-bottom: 6px; }
+
+/* Cooking reels (build 33): the full-screen player. One library picture
+   at a time, slow zoom and drift, a soft crossfade between steps, the
+   recipe's own step text as the caption. */
+.reelPlayer { position: fixed; inset: 0; z-index: 90; background: #33231C; display: flex; flex-direction: column; }
+.reelPlayer.hidden { display: none; }
+.reelStage { position: relative; flex: 1; overflow: hidden; background: #FFF7EA; }
+.reelImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.7s ease; }
+.reelImg.on { opacity: 1; }
+.reelImg.drift { animation: reelDrift 4.4s linear forwards; }
+@keyframes reelDrift { from { transform: scale(1.02) translate(0, 0); } to { transform: scale(1.14) translate(-1.6%, -2.2%); } }
+.reelCaption { background: #33231C; color: #FFF7EA; padding: 14px 20px 6px; }
+.reelMeta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; opacity: 0.85; }
+.reelDots { display: inline-flex; gap: 6px; }
+.reelDot { width: 7px; height: 7px; border-radius: 999px; background: #FFF7EA; opacity: 0.35; }
+.reelDot.on { opacity: 1; }
+.reelCaption p { margin: 6px 0 2px; font-size: 19px; line-height: 1.4; font-weight: 600; }
+.reelBar { background: #33231C; display: flex; gap: 10px; align-items: center; justify-content: flex-end; padding: 10px 16px calc(14px + env(safe-area-inset-bottom)); }
+.reelBar .pillBtn { background: #FFF7EA; color: #33231C; border-color: #FFF7EA; }
+.reelBar .roundBtn { background: #FFF7EA; color: #33231C; }
