@@ -135,6 +135,7 @@
   </aside>
   <main id="main">
     <section id="view-calendar" class="view active">
+      <div id="guideHello"></div>
       <header class="topBar">
         <div>
           <h1 id="calTitle">Calendar</h1>
@@ -161,6 +162,7 @@
     </section>
 
     <section id="view-recipes" class="view">
+      <div id="guideMoment-recipes"></div>
       <header class="topBar"><div><h1 data-i18n="nav.recipes">Recipes</h1><p class="sub" data-i18n="recipes.sub">Add recipes your way, or search the ones you have.</p></div></header>
       <div class="card">
         <h2 data-i18n="recipes.addTitle">Add your recipe</h2>
@@ -224,6 +226,7 @@
     </section>
 
     <section id="view-groceries" class="view">
+      <div id="guideMoment-groceries"></div>
       <header class="topBar"><div><h1 data-i18n="nav.groceries">Groceries</h1><p class="sub" data-i18n="groc.sub">Everything you have, in one place. Food that goes bad sooner is used in recipes first.</p></div></header>
       <div class="card">
         <h2 data-i18n="groc.addTitle">Add groceries</h2>
@@ -256,6 +259,7 @@
     </section>
 
     <section id="view-list" class="view">
+      <div id="guideMoment-list"></div>
       <header class="topBar"><div><h1 data-i18n="nav.list">Grocery List</h1><p class="sub" data-i18n="list.sub">Built from your next 7 days of meals. Add or remove anything.</p></div></header>
       <div class="card">
         <div class="row"><input id="extraName" type="text" data-i18n-ph="list.addPh" placeholder="Add anything, like dish soap"><button id="extraAdd" class="primaryBtn"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> <span data-i18n="common.add">Add</span></button></div>
@@ -265,6 +269,7 @@
     </section>
 
     <section id="view-family" class="view">
+      <div id="guideMoment-family"></div>
       <header class="topBar"><div><h1 data-i18n="nav.family">Family</h1><p class="sub" data-i18n="fam.sub">Each person has their own colour, tags, dislikes and allergies. New plans leave out recipes with listed foods for everyone. Check labels and shared equipment for allergies.</p></div></header>
       <div class="card">
         <h2 data-i18n="fam.addTitle">Add a person</h2>
@@ -332,12 +337,15 @@
            and this card says so in plain words beside the priced offer;
            the popup's Try button lands here. Prices are the locked
            prices of record (PRICING.md). -->
+      <!-- Plans card (2 Nov ruling): the sales lines that stood here
+           (Plus and Family prices, the on-sale line) are OUT of the
+           shipped app while everything is free. The strings stay in
+           the language table and the buy box machinery stays in
+           app.js and payments.js, switched off at plansOn in
+           payments-config.js, saved for later. -->
       <div class="card" id="plansCard">
         <h2 data-i18n="plans.title">Plans</h2>
-        <p class="hint" id="plansStateLine" data-i18n="plans.freeLine">You are on the Free plan. The calendar, recipes, cooking reminders and data export are included. Allergy and dislike filters stay free in every plan.</p>
-        <p class="hint" data-i18n="plans.plusLine">Meal Prep Plus is A$6.99 a month or A$49.99 a year, and your first month is free. Plus adds profiles for your whole table, the grocery list built from your plan, best until dates on your groceries, limited fridge photo suggestions to review, and unlimited plans and your own recipes.</p>
-        <p class="hint" data-i18n="plans.onSaleLine">Plus is on sale now, and this card is where you start it.</p>
-        <p class="hint" data-i18n="plans.familyLine">Meal Prep Family is A$9.99 a month or A$79.99 a year. It comes later, when its extras are built.</p>
+        <p class="hint" id="plansStateLine" data-i18n="plans.freeNowLine">Everything in Meal Prep is free right now. Every feature is open, and no plan is needed. Allergy and dislike filters are always free.</p>
       </div>
       <div class="card">
         <h2 data-i18n="appear.title">Appearance</h2>
@@ -354,24 +362,17 @@
           <input id="bgPhotoInput" type="file" accept="image/*" class="hidden">
           <p class="hint" id="bgPhotoMsg"></p>
         </div>
-        <!-- Language row (app v34): quiet, inside Appearance. Auto
-             follows the device language; the pick is saved in
-             settings (user data, Law B). English and Español are
-             named in their own language, so they carry no key. -->
-        <div class="langBlock">
-          <span class="fieldLabel" data-i18n="prefs.language">Language</span>
-          <div class="bgRow" role="radiogroup" data-i18n-label="prefs.language" aria-label="Language" id="langRow">
-            <button class="bgChip langChip" data-lang-choice="auto" role="radio" aria-checked="true"><span data-i18n="prefs.langAuto">Auto</span></button>
-            <button class="bgChip langChip" data-lang-choice="en" role="radio" aria-checked="false"><span>English</span></button>
-            <button class="bgChip langChip" data-lang-choice="es" role="radio" aria-checked="false"><span>Español</span></button>
-          </div>
-          <p class="hint" data-i18n="prefs.languageHint">Auto follows the language of your device.</p>
-        </div>
+        <!-- The language row stood here from app v34 to build 32.
+             It is OUT of the shipped app (the 2 Nov ruling):
+             English only for now, no switch shown. The row, the
+             Spanish table and the choice machinery are saved in
+             the tree, unshipped, for later. -->
       </div>
       <div class="card">
         <h2 data-i18n="setup.title">Setup guide</h2>
         <p class="hint" data-i18n="setup.hint">Walk through the setup with Mina, from where you left off. Nothing in the app waits on it.</p>
         <div class="row"><button id="guideReopen" class="pillBtn" data-i18n="setup.open">Open the setup guide</button></div>
+        <div id="guideChecklist"></div>
       </div>
       <div class="card">
         <h2 data-i18n="cal.import">Bring my calendar in</h2>
@@ -398,6 +399,7 @@
     </section>
 
     <section id="view-reminders" class="view">
+      <div id="guideMoment-reminders"></div>
       <header class="topBar"><div><h1 data-i18n="nav.reminders">Reminders</h1><p class="sub" data-i18n="rem.sub">Start cooking times for your next 7 days, worked out from each recipe and your eating times.</p></div></header>
       <div class="card">
         <h2 data-i18n="rem.notifTitle">Notifications</h2>
@@ -408,6 +410,7 @@
     </section>
 
     <section id="view-photocal" class="view">
+      <div id="guideMoment-photocal"></div>
       <header class="topBar"><div><h1 data-i18n="nav.photocal">Photo calories</h1><p class="sub" data-i18n="photocal.sub">Take a photo of food and get a rough calorie count for what the app can see.</p></div></header>
       <div class="card">
         <h2 data-i18n="photocal.cardTitle">Photo of food</h2>
@@ -445,6 +448,7 @@
 </div>
 
 <div id="recipeModal" class="modal hidden"><div class="modalCard" id="recipeModalCard"></div></div>
+<div id="reelPlayer" class="reelPlayer hidden" role="dialog" aria-modal="true"></div>
 
 <div id="guideModal" class="modal hidden">
   <div class="modalCard small guideCard" id="guideCard"></div>
@@ -493,7 +497,6 @@
     <button class="roundBtn upgradeX" id="upgradeX" data-i18n-label="common.close" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <h2 id="upgradeTitle"></h2>
     <p class="guideLine" id="upgradeBody"></p>
-    <p class="hint" id="upgradeOffer" data-i18n="upgrade.offer">Try Plus free for your first month. After that, Plus is A$6.99 a month or A$49.99 a year. Cancel any time.</p>
     <div class="row upgradeBtns"><button data-i18n="upgrade.try" class="primaryBtn" id="upgradeTry">Try Plus free</button><button data-i18n="upgrade.notNow" class="pillBtn" id="upgradeNotNow">Not now</button></div>
   </div>
 </div>

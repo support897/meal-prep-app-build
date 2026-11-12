@@ -86,6 +86,16 @@
      never regress it (two devices racing resolve exactly there:
      the fresher mirror wins field by field, the standing later
      push wins semantics applied to one map). */
+  /* First-encounter guide moments (build 33): which Mina moments
+     have landed, per view. The view list mirrors logic.js
+     GUIDE_MOMENT_VIEWS; the suite holds the two equal by a round
+     trip through this cleaner and logic's own. Only true survives. */
+  function cleanGuideSeenMap(x) {
+    const out = {};
+    if (!isPlainObj(x)) return out;
+    ["groceries", "list", "photocal", "family", "reminders", "recipes", "cook"].forEach(function (k) { if (x[k] === true) out[k] = true; });
+    return out;
+  }
   function cleanStamps(v) {
     var src = isPlainObj(v) ? v : {};
     return {
@@ -175,7 +185,8 @@
       stamps: cleanStamps(state.stamps),
       planCleared: state.planCleared === true,
       autoPlan: state.autoPlan !== false,
-      guideState: isPlainObj(state.guideState) ? { status: str(state.guideState.status, "notStarted"), step: num(state.guideState.step, 1), v: num(state.guideState.v, 2), nameAsks: num(state.guideState.nameAsks, 0), nameAskVisit: str(state.guideState.nameAskVisit, "") } : { status: "notStarted", step: 1, v: 2, nameAsks: 0, nameAskVisit: "" },
+      guideState: isPlainObj(state.guideState) ? { status: str(state.guideState.status, "notStarted"), step: num(state.guideState.step, 1), v: num(state.guideState.v, 2), nameAsks: num(state.guideState.nameAsks, 0), nameAskVisit: str(state.guideState.nameAskVisit, ""), stopDrawn: state.guideState.stopDrawn === true } : { status: "notStarted", step: 1, v: 2, nameAsks: 0, nameAskVisit: "", stopDrawn: false },
+      guideSeen: cleanGuideSeenMap(state.guideSeen),
       settings: isPlainObj(state.settings) ? clone(state.settings) : { background: { kind: "brand", photoMode: "light" }, backgroundPhoto: "" },
       updatedAt: TS
     };
@@ -284,7 +295,7 @@
      -> { state (app shaped, partial-safe), recovered: [...], counts } */
   function docsToState(docs) {
     var recovered = [], counts = { in: 0, kept: 0, recovered: 0 };
-    var state = { accountName: "", preferences: [], diet: "none", maxCookMinutes: 60, defaultServings: 2, busyNights: [], quickMinutes: 30, cooked: {}, leftovers: {}, recipeIngredients: [], recipeIngredientsManual: false, photoTrialUsed: false, favorites: [], eatTimes: { breakfast: "07:30", lunch: "12:30", dinner: "18:30" }, setupMinutes: 5, extraReminders: { breakfast: 0, lunch: 0, dinner: 0 }, reminderMode: { breakfast: "cook", lunch: "cook", dinner: "cook" }, reminderTimes: { breakfast: "", lunch: "", dinner: "" }, skips: {}, stamps: { signedUp: false, activated: false, sessions: 0, lastDay: "" }, planCleared: false, autoPlan: false, guideState: { status: "notStarted", step: 1, v: 2, nameAsks: 0, nameAskVisit: "" }, settings: { background: { kind: "brand", photoMode: "light" }, backgroundPhoto: "" }, family: [], pantry: [], plan: {}, customRecipes: [], extras: [], events: [], imports: [], doneItems: {}, hiddenItems: {} };
+    var state = { accountName: "", preferences: [], diet: "none", maxCookMinutes: 60, defaultServings: 2, busyNights: [], quickMinutes: 30, cooked: {}, leftovers: {}, recipeIngredients: [], recipeIngredientsManual: false, photoTrialUsed: false, favorites: [], eatTimes: { breakfast: "07:30", lunch: "12:30", dinner: "18:30" }, setupMinutes: 5, extraReminders: { breakfast: 0, lunch: 0, dinner: 0 }, reminderMode: { breakfast: "cook", lunch: "cook", dinner: "cook" }, reminderTimes: { breakfast: "", lunch: "", dinner: "" }, skips: {}, stamps: { signedUp: false, activated: false, sessions: 0, lastDay: "" }, planCleared: false, autoPlan: false, guideState: { status: "notStarted", step: 1, v: 2, nameAsks: 0, nameAskVisit: "", stopDrawn: false }, guideSeen: {}, settings: { background: { kind: "brand", photoMode: "light" }, backgroundPhoto: "" }, family: [], pantry: [], plan: {}, customRecipes: [], extras: [], events: [], imports: [], doneItems: {}, hiddenItems: {} };
     var profile = isPlainObj(docs && docs.profile) ? docs.profile : null;
     if (profile) {
       state.accountName = str(profile.name, "");
@@ -316,7 +327,8 @@
       if (isPlainObj(profile.stamps)) state.stamps = cleanStamps(profile.stamps);
       state.planCleared = profile.planCleared === true;
       state.autoPlan = profile.autoPlan !== false;
-      if (isPlainObj(profile.guideState)) state.guideState = { status: str(profile.guideState.status, "notStarted"), step: num(profile.guideState.step, 1), v: num(profile.guideState.v, 2), nameAsks: num(profile.guideState.nameAsks, 0), nameAskVisit: str(profile.guideState.nameAskVisit, "") };
+      if (isPlainObj(profile.guideState)) state.guideState = { status: str(profile.guideState.status, "notStarted"), step: num(profile.guideState.step, 1), v: num(profile.guideState.v, 2), nameAsks: num(profile.guideState.nameAsks, 0), nameAskVisit: str(profile.guideState.nameAskVisit, ""), stopDrawn: profile.guideState.stopDrawn === true };
+      if (isPlainObj(profile.guideSeen)) state.guideSeen = cleanGuideSeenMap(profile.guideSeen);
       if (isPlainObj(profile.settings)) state.settings = clone(profile.settings);
     }
     var cols = isPlainObj(docs && docs.collections) ? docs.collections : {};

@@ -136,7 +136,10 @@
   var opinion = null; /* the cached opinion: null = no opinion held */
 
   function enabled() {
-    return !!(cfg && typeof cfg.isEnabled === "function" && cfg.isEnabled());
+    /* The plans switch (Ilse's ruling, 2 Nov): the rails sleep while
+       plansOn is off, whatever the catalogue holds. */
+    if (!cfg || cfg.plansOn !== true) return false;
+    return !!(typeof cfg.isEnabled === "function" && cfg.isEnabled());
   }
   /* The install is lazy and native gated: the first live entry
      point inside the package swaps the stub for the real provider;

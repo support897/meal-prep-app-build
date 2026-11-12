@@ -136,6 +136,7 @@
        begun guide starts at step 1. The guideState slice is the only
        write this repair makes. */
     out.guideState = L.cleanGuideState(s.guideState, s.onboarded === true, L.stateHasUserData(out));
+    out.guideSeen = L.cleanGuideSeen(s.guideSeen);
     /* Auto planning: new states start with an empty plan and only fill it
        when the user plans (the guide, Fill this month, Plan my first week).
        A saved state with no autoPlan field predates the flag and belongs to
@@ -317,7 +318,17 @@
   };
   const plusShown = {}; /* session only: one popup per want */
   let upgradeWant = null;
+  /* The plans switch (the 2 Nov ruling): while plansOn is off in
+     payments-config.js, every user has everything: plusActive reads
+     true for all, so no gate fires and no paywall can open. The
+     entitlement read below stands untouched for the day the switch
+     turns back on. */
+  function plansOn() {
+    const c = window.MP_PAYMENTS_CONFIG;
+    return !!(c && c.plansOn === true);
+  }
   function plusActive() {
+    if (!plansOn()) return true;
     if (document.body.classList.contains("demoOn")) return true;
     const s = window.MP_ACCOUNT_SYNC;
     return !!(s && typeof s.getEntitlement === "function" && s.getEntitlement() === "pro");
@@ -452,7 +463,10 @@
        render, so the line lands with the resolution; a language
        switch reloads the page into the same render. */
     const stateLine = $("plansStateLine");
-    if (stateLine) stateLine.textContent = t(plusActive() ? "plans.topLine" : "plans.freeLine");
+    /* While the plans switch is off (2 Nov ruling) the line tells
+       the free truth; the top and free lines below stand for the
+       day the switch turns back on. */
+    if (stateLine) stateLine.textContent = plansOn() ? t(plusActive() ? "plans.topLine" : "plans.freeLine") : t("plans.freeNowLine");
     const P = window.MP_PAYMENTS;
     let box = $("plansBuy");
     if (box) box.remove();
@@ -674,6 +688,7 @@
     renderNav();
     syncBottomNav(v);
     render();
+    maybeGuideMoment(v);
     /* QA F1 (build 9): a nav choice on the phone shape lands the
        person ON the view, so the drawer closes with the switch.
        Left open, the drawer stayed up over the new view (the page
@@ -811,7 +826,20 @@
       $("calTitle").textContent = dateTitle(cursor);
       root.innerHTML = "<div class='dayMeals'>" + ["breakfast", "lunch", "dinner"].map(function (meal) {
         const r = recipeById(state.plan[key][meal]); const m = D.MEALS[meal];
-        if (!r) return "";
+        /* An empty slot still stands on the day (QA b33, Finding 5):
+           it renders nothing before this fix, so a cleared meal could
+           not be planned back from the day that shows it. The empty
+           row carries the same picker the filled row swaps with —
+           one tap plans the meal — and a skip the day already holds
+           stays named on it. */
+        if (!r) {
+          const pickOptions = eligibleRecipes().filter(function (x) { return x.meal === meal; }).map(function (x) {
+            return "<option value='" + x.id + "'>" + esc(rName(x)) + "</option>";
+          }).join("");
+          const wasSkipped = !!state.skips[key + "." + meal];
+          return "<div class='dayMealBig emptySlot'><span class='badge' style='background:" + m.soft + ";color:#111827'>" + mealIcon(meal) + mealLabel(meal) + "</span>" + (wasSkipped ? "<span class='skippedTag'>" + t("cal.skipped") + "</span>" : "") +
+            "<select class='swapSel' data-swap='" + meal + "' data-day='" + key + "' aria-label='" + t("cal.chooseMeal") + "'><option value=''>" + t("cal.chooseMeal") + "</option>" + pickOptions + "</select></div>";
+        }
         const start = L.reminderTime(state.eatTimes[meal], r.minutes, state.setupMinutes);
         const options = eligibleRecipes().filter(function (x) { return x.meal === meal; }).map(function (x) {
           return "<option value='" + x.id + "'" + (x.id === r.id ? " selected" : "") + ">" + esc(rName(x)) + "</option>";
@@ -825,6 +853,7 @@
           "<div class='mealName'>" + esc(rName(r)) + "</div>" +
           "<p class='hint'>" + t("cal.dayMeta", { min: r.minutes, eat: L.formatTime(state.eatTimes[meal]), start: L.formatTime(start) }) + (kcalText(r) ? " · " + kcalText(r) : "") + "</p>" +
           "<button class='primaryBtn' data-open-recipe='" + r.id + "'>" + t("cal.openFullRecipe") + "</button>" +
+          "<button class='pillBtn' data-watch-recipe='" + r.id + "'>" + t("reel.watch") + "</button>" +
           "<select class='swapSel' data-swap='" + meal + "' data-day='" + key + "' aria-label='" + t("cal.swapMeal") + "'>" + options + "</select>" +
           "<button class='miniBtn' data-remove-meal='" + meal + "' data-day='" + key + "'>" + icon("trash-2", "iconSm") + " " + t("cal.removeMeal") + "</button>" +
           "<label class='skipTick'><input type='checkbox' data-skip='" + meal + "' data-day='" + key + "'" + (skipped ? " checked" : "") + "> " + t("cal.skip") + "</label></div>";
@@ -861,6 +890,9 @@
     root.querySelectorAll("[data-open-recipe]").forEach(function (b) {
       b.addEventListener("click", function (e) { e.stopPropagation(); openRecipe(b.getAttribute("data-open-recipe")); });
     });
+    root.querySelectorAll("[data-watch-recipe]").forEach(function (b) {
+      b.addEventListener("click", function (e) { e.stopPropagation(); const r = recipeById(b.getAttribute("data-watch-recipe")); if (r) MP_REEL.open(r); });
+    });
     root.querySelectorAll("[data-open-day]").forEach(function (b) {
       b.addEventListener("click", function () { cursor = L.parseKey(b.getAttribute("data-open-day")); viewMode = "day"; syncSeg(); renderCalendar(); });
     });
@@ -869,6 +901,7 @@
     });
     root.querySelectorAll("[data-swap]").forEach(function (sel) {
       sel.addEventListener("change", function () {
+        if (!sel.value) return;
         state.plan[sel.getAttribute("data-day")][sel.getAttribute("data-swap")] = sel.value; save(); notePlanned("swap"); renderCalendar(); renderSide(); toast(t("cal.mealSwapped"));
       });
     });
@@ -951,7 +984,7 @@
       "<h3>" + t("recipe.howTo") + "</h3><ol class='stepsList'>" + rSteps(r).map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol>" +
       adsHtml +
       cookedHtml +
-      "<div class='row'><button class='pillBtn' id='toggleFavorite' aria-pressed='" + (favorite ? "true" : "false") + "'>" + t(favorite ? "recipe.removeFavorite" : "recipe.saveFavorite") + "</button><button class='primaryBtn' id='startCook'>" + t("recipe.startCooking") + "</button><button class='primaryBtn' id='addMissing'>" + t("recipe.addMissing") + "</button><button class='pillBtn' id='closeRecipe2'>" + t("common.close") + "</button>" +
+      "<div class='row'><button class='pillBtn' id='toggleFavorite' aria-pressed='" + (favorite ? "true" : "false") + "'>" + t(favorite ? "recipe.removeFavorite" : "recipe.saveFavorite") + "</button><button class='primaryBtn' id='startCook'>" + t("recipe.startCooking") + "</button><button class='pillBtn' id='watchRecipe'>" + t("reel.watch") + "</button><button class='primaryBtn' id='addMissing'>" + t("recipe.addMissing") + "</button><button class='pillBtn' id='closeRecipe2'>" + t("common.close") + "</button>" +
       (state.customRecipes.some(function (x) { return x.id === r.id; }) ? "<button class='pillBtn danger' id='deleteRecipe'>" + icon("trash-2", "iconSm") + " " + t("recipe.deleteMine") + "</button>" : "") + "</div>";
     $("recipeModal").classList.remove("hidden");
     const close = function () { $("recipeModal").classList.add("hidden"); };
@@ -983,6 +1016,7 @@
       });
     });
     $("startCook").addEventListener("click", function () { renderCook(r, cookPlace[r.id] || 0); });
+    $("watchRecipe").addEventListener("click", function () { MP_REEL.open(r); });
     $("addMissing").addEventListener("click", function () {
       let n = 0;
       r.ingredients.forEach(function (i) {
@@ -1063,14 +1097,19 @@
   }
   function cookClock(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
   function cookTickFn() {
+    /* A timer belongs to its recipe, step and segment, never to the
+       chip standing on screen (QA b33, G33): moving to another step
+       takes the chip out of the page, and the timer keeps counting
+       without it — two timers on two steps run at once, and a timer
+       that ends off screen still speaks through the toast. A chip
+       that IS on screen shows its timer's live count. */
     let any = false;
     Object.keys(cookTimers).forEach(function (tid) {
       const tm = cookTimers[tid]; const el = document.getElementById(tid);
-      if (!el) { delete cookTimers[tid]; return; }
       any = true;
       const left = tm.endsAt - Date.now();
-      if (left <= 0) { el.textContent = tm.label + " · " + t("cook.timeUp"); el.classList.add("timerDone"); el.classList.remove("timerRun"); delete cookTimers[tid]; toast(t("cook.timerDone", { label: tm.label })); }
-      else el.textContent = tm.label + " · " + cookClock(left);
+      if (left <= 0) { if (el) { el.textContent = tm.label + " · " + t("cook.timeUp"); el.classList.add("timerDone"); el.classList.remove("timerRun"); } delete cookTimers[tid]; toast(t("cook.timerDone", { label: tm.label })); }
+      else if (el) el.textContent = tm.label + " · " + cookClock(left);
     });
     if (!any && cookTick) { clearInterval(cookTick); cookTick = null; }
   }
@@ -1082,17 +1121,22 @@
     const todayPlan = state.plan[todayKey()] || {};
     const others = ["breakfast", "lunch", "dinner"].map(function (m) { return todayPlan[m]; }).filter(function (oid, pos, arr) { return oid && oid !== r.id && arr.indexOf(oid) === pos; }).map(function (oid) { return recipeById(oid); }).filter(Boolean);
     const segs = stepSegments(steps[stepIx] || "");
+    /* Build 33: the cook moment lands on the first cook opening
+       only, at the first step, and never again (guideSeen). */
+    const showCookMoment = stepIx === 0 && !(state.guideSeen && state.guideSeen.cook) && !guideTourOpen();
     $("recipeModalCard").innerHTML =
       "<div class='row' style='justify-content:space-between'><button class='pillBtn' id='cookBack'>" + t("cook.back") + "</button><strong>" + t("cook.title") + "</strong><button class='roundBtn' id='cookClose' aria-label='" + t("common.close") + "'>" + icon("x") + "</button></div>" +
       "<h2>" + esc(rName(r)) + "</h2>" +
+      (showCookMoment ? "<div class='guideMoment guideCookMoment'><img class='guideMomentPose' src='mina-point-show.svg' alt='" + esc(t("tour.minaAlt")) + "'><div class='guideMomentBody'><p>" + esc(t("guide.moment.cook")) + "</p><div class='row'><button class='pillBtn' id='cookMomentOk'>" + esc(t("guide.gotIt")) + "</button></div></div></div>" : "") +
       (others.length ? "<p class='pMeta'>" + t("cook.alsoToday") + "</p><div class='chipRow'>" + others.map(function (o) { return "<button class='chip' data-cook-switch='" + o.id + "'>" + esc(rName(o)) + "</button>"; }).join("") + "</div>" : "") +
       "<p class='pMeta'>" + t("cook.stepOf", { a: stepIx + 1, b: steps.length }) + "</p>" +
-      "<div class='cookStep'>" + segs.map(function (s) { return s.timer ? "<button class='timerChip' id='tm" + (++cookSeq) + "' data-timer-secs='" + s.timer + "' data-timer-label='" + esc(s.label) + "'>" + icon("clock", "iconSm") + " " + esc(s.label) + "</button>" : esc(s.text); }).join("") + "</div>" +
+      "<div class='cookStep'>" + segs.map(function (s, sIx) { if (!s.timer) return esc(s.text); const tmId = "tm_" + r.id + "_" + stepIx + "_" + sIx; const running = cookTimers[tmId]; const left = running ? running.endsAt - Date.now() : 0; return "<button class='timerChip" + (running ? " timerRun" : "") + "' id='" + tmId + "' data-timer-secs='" + s.timer + "' data-timer-label='" + esc(s.label) + "'>" + icon("clock", "iconSm") + " " + esc(s.label) + (running && left > 0 ? " · " + cookClock(left) : "") + "</button>"; }).join("") + "</div>" +
       "<details class='cookIng'><summary>" + t("recipe.ingredients") + "</summary><ul class='ingList'>" + r.ingredients.map(function (i, ix2) { return "<li>" + rIngLine(r, i, ix2) + "</li>"; }).join("") + "</ul></details>" +
       "<div class='row'><button class='pillBtn' id='cookPrev'" + (stepIx === 0 ? " disabled" : "") + ">" + t("cook.prev") + "</button><button class='primaryBtn' id='cookNext'>" + (stepIx >= steps.length - 1 ? t("cook.finish") : t("cook.next")) + "</button></div>";
     $("recipeModal").classList.remove("hidden");
     $("cookBack").addEventListener("click", function () { cookUnlockScreen(); openRecipe(r.id); });
     $("cookClose").addEventListener("click", function () { cookUnlockScreen(); $("recipeModal").classList.add("hidden"); });
+    const cmOk = $("cookMomentOk"); if (cmOk) cmOk.addEventListener("click", function () { markGuideSeen("cook"); renderCook(r, stepIx); });
     const prev = $("cookPrev"); if (prev) prev.addEventListener("click", function () { renderCook(r, stepIx - 1); });
     $("cookNext").addEventListener("click", function () { if (stepIx >= steps.length - 1) { cookUnlockScreen(); openRecipe(r.id); } else renderCook(r, stepIx + 1); });
     $("recipeModalCard").querySelectorAll("[data-cook-switch]").forEach(function (b) { b.addEventListener("click", function () { const o = recipeById(b.getAttribute("data-cook-switch")); if (o) renderCook(L.scaleRecipe(o, modalServings || state.defaultServings), cookPlace[o.id] || 0); }); });
@@ -1107,6 +1151,82 @@
     });
   }
   $("recipeModal").addEventListener("click", function (e) { if (e.target === $("recipeModal")) $("recipeModal").classList.add("hidden"); });
+
+  /* ===== Cooking reels (build 33, the Fit Hard build 33 pattern) =====
+     One player inside the app, one small library of Mina step pictures
+     (wash, chop, stir, serve — the set of record in reels/) reused
+     across recipes. Each recipe picks its pictures in its own step
+     order through L.reelPics; the caption is the recipe's own step
+     text, verbatim. The player is a full-screen overlay with a slow
+     zoom and drift on each picture and a soft crossfade between
+     steps; it saves nothing and never touches account state. */
+  const MP_REEL = (function () {
+    const STEP_MS = 3500;
+    let built = false, timer = null, pics = [], steps = [], ix = 0, playing = false, frontIsA = true;
+    function els() { return { root: $("reelPlayer"), a: $("reelImgA"), b: $("reelImgB"), cap: $("reelCaptionText"), count: $("reelStepCount"), dots: $("reelDots"), pause: $("reelPauseBtn"), replay: $("reelReplayBtn") }; }
+    function build() {
+      if (built) return; built = true;
+      $("reelPlayer").innerHTML =
+        "<div class='reelStage'><img id='reelImgA' class='reelImg' alt=''><img id='reelImgB' class='reelImg' alt=''></div>" +
+        "<div class='reelCaption'><div class='reelMeta'><span id='reelStepCount'></span><span class='reelDots' id='reelDots'></span></div><p id='reelCaptionText'></p></div>" +
+        "<div class='reelBar'><button class='pillBtn' id='reelPauseBtn'>" + t("reel.pause") + "</button><button class='pillBtn hidden' id='reelReplayBtn'>" + t("reel.replay") + "</button><button class='roundBtn' id='reelCloseBtn' aria-label='" + t("common.close") + "'>" + icon("x") + "</button></div>";
+      $("reelCloseBtn").addEventListener("click", close);
+      $("reelPauseBtn").addEventListener("click", togglePause);
+      $("reelReplayBtn").addEventListener("click", function () { start(); });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("reelPlayer").classList.contains("hidden")) close(); });
+    }
+    function schedule() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (playing) timer = setTimeout(next, STEP_MS);
+    }
+    function show(i) {
+      const e = els();
+      const incoming = frontIsA ? e.b : e.a, outgoing = frontIsA ? e.a : e.b;
+      incoming.src = "reels/mina-" + pics[i] + ".webp";
+      incoming.classList.remove("drift"); void incoming.offsetWidth; incoming.classList.add("drift");
+      incoming.classList.add("on"); outgoing.classList.remove("on"); outgoing.classList.remove("drift");
+      frontIsA = !frontIsA;
+      e.cap.textContent = steps[i];
+      e.count.textContent = t("cook.stepOf", { a: i + 1, b: steps.length });
+      e.dots.innerHTML = steps.map(function (_, d) { return "<span class='reelDot" + (d === i ? " on" : "") + "'></span>"; }).join("");
+      schedule();
+    }
+    function next() {
+      if (ix >= pics.length - 1) { finish(); return; }
+      ix++; show(ix);
+    }
+    function finish() {
+      playing = false; if (timer) { clearTimeout(timer); timer = null; }
+      const e = els(); e.pause.classList.add("hidden"); e.replay.classList.remove("hidden");
+    }
+    function start() {
+      const e = els(); ix = 0; playing = true;
+      e.pause.classList.remove("hidden"); e.replay.classList.add("hidden"); e.pause.textContent = t("reel.pause");
+      show(0);
+    }
+    function togglePause() {
+      const e = els();
+      playing = !playing;
+      e.a.style.animationPlayState = playing ? "running" : "paused";
+      e.b.style.animationPlayState = playing ? "running" : "paused";
+      e.pause.textContent = t(playing ? "reel.pause" : "reel.play");
+      schedule();
+    }
+    function open(r) {
+      steps = rSteps(r); pics = L.reelPics(steps);
+      if (!steps.length || !pics.length) return;
+      build();
+      els().root.classList.remove("hidden");
+      start();
+    }
+    function close() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      playing = false;
+      els().root.classList.add("hidden");
+    }
+    return { open: open, close: close, picsFor: function (r) { return L.reelPics(rSteps(r)); } };
+  })();
+  window.MP_REEL = MP_REEL;
 
   /* Favourites are recipe ids on the signed-in profile, so the list
      follows its owner across sign-in and devices without duplicating recipes. */
@@ -1504,17 +1624,30 @@
     const foundByName = Object.create(null);
     let modelCompleted = false;
     try {
-      /* U8 (app v49): the model load races a 30 second bound. A
-         load that never settles used to hold the looking line
-         forever; the timeout now falls into the same catch a
-         failed load has always taken, and the tap to confirm
-         fallback below lands exactly as it does for a refusal. */
+      /* U8 (app v49): the model load races a bound (180 seconds
+         since the CLIP finder landed; the comment here said 30
+         until build 33 corrected it). A load that never settles
+         used to hold the looking line forever; the timeout now
+         falls into the same catch a failed load has always taken,
+         and the tap to confirm fallback below lands exactly as it
+         does for a refusal. Build 33 adds the second stage line:
+         once the model is aboard, the words say the photo itself
+         is being looked through, so the tile passes never sit
+         under a frozen downloading line. */
       await window.MP_WAIT.bound((async function () {
         const eye = await import("./food-eye.js");
         const img = $("photoPreview").querySelector("img");
+        let downloadDone = false;
+        /* The finder also carries the deadline itself (build 33
+           fix round, QA b33 E27): the bound's timer can be starved
+           by the model's own work — the lane read 188 seconds
+           against this 180 — so the tile loop checks the same
+           moment at its own yields and stops there. */
+        const scanDeadline = Date.now() + 180000;
         const ranked = await eye.findFoods(img.src, function (p) {
           if (p && p.status === "progress" && p.total > 1e6) $("photoResults").innerHTML = "<p class='hint'>" + t("photo.downloading", { pct: Math.round(p.loaded / p.total * 100) }) + "</p>";
-        });
+          if (p && p.status === "ready" && !downloadDone) { downloadDone = true; $("photoResults").innerHTML = "<p class='hint'>" + t("photo.lookingPhoto") + "</p>"; }
+        }, undefined, scanDeadline);
         modelCompleted = true;
         ranked.forEach(function (r) { foundByName[r.name] = { name: r.name, score: undefined, rank: r.rank }; });
       })(), 180000);
@@ -1786,6 +1919,7 @@
        only while the payment rails are live; while they sleep this
        call leaves the card exactly as it ships. */
     renderPlansBuy();
+    renderGuideChecklist();
   }
   /* Language row (app v34): the pick is saved in settings (user
      data, Law B), mirrored for the next boot's first paint, and the
@@ -2298,6 +2432,25 @@
     if (step === 1) {
       if (tourNameVariant()) {
         tourNameStopDrawn = true;
+        /* The drawn stop is witnessed on the account record
+           itself (guideState.stopDrawn), not only in this page
+           life's memory: a landing's reload ends the page life,
+           and the refresh rewind below must still know the stop
+           drew and was sailed past — the re-offer discipline
+           owns it then, never the rewind (QA b33r, drive 4's
+           reconciliation with the step-bound flip). */
+        if (!(state.guideState && state.guideState.stopDrawn)) {
+          state.guideState = Object.assign({}, state.guideState, { stopDrawn: true });
+          /* Local write only — never save(): a save here fires
+             the account push from inside a render, and the
+             working copy at a landing's refresh can be a
+             half-built grid the push would carry over the
+             server's record (the F1-B poisoning, QA b33r's
+             round). The flag rides the tour's next own save
+             to the server; the local copy is what a reload
+             reads first. */
+          writeLocalState();
+        }
         /* Stop 1, the name: asked inside the tour, in Mina's own
            words, one field, one Next. The answer lands through the
            accounts layer's pending name path (see tourNext). */
@@ -2441,6 +2594,123 @@
   $("guideReopen").addEventListener("click", function () {
     openGuide(state.guideState && state.guideState.status === "done" ? 1 : undefined);
   });
+
+  /* ---- Build 33: Mina beyond the tour (the guide research round).
+     First-encounter moments per view, the Getting started checklist
+     in the guide's home, the return greeting, and this build's
+     what's-changed card. The quiet rules bind all of it: never
+     while the tour modal is open, never twice, never after the
+     user has done the thing the moment teaches, and the words
+     carry the content while Mina points. guideSeen rides the
+     account profile (accounts.js), so a second device is not
+     re-taught what this one already learned. ---- */
+  function guideTourOpen() { const m = $("guideModal"); return !!(m && !m.classList.contains("hidden")); }
+  function markGuideSeen(view) {
+    if (!state.guideSeen) state.guideSeen = {};
+    if (!state.guideSeen[view]) { state.guideSeen[view] = true; save(); }
+  }
+  function guideMomentCard(pose, lineKey, btnKey) {
+    return "<div class='card guideMoment'><img class='guideMomentPose' src='" + pose + "' alt='" + esc(t("tour.minaAlt")) + "'><div class='guideMomentBody'><p>" + esc(t(lineKey)) + "</p><div class='row'>" +
+      (btnKey ? "<button class='primaryBtn' data-moment-act='1'>" + esc(t(btnKey)) + "</button>" : "") +
+      "<button class='pillBtn' data-moment-ok='1'>" + esc(t("guide.gotIt")) + "</button></div></div></div>";
+  }
+  function bindGuideMoment(slot, view, act) {
+    const ok = slot.querySelector("[data-moment-ok]");
+    if (ok) ok.addEventListener("click", function () { markGuideSeen(view); slot.innerHTML = ""; });
+    const ab = slot.querySelector("[data-moment-act]");
+    if (ab) ab.addEventListener("click", function () { markGuideSeen(view); slot.innerHTML = ""; if (act) act(); });
+  }
+  function focusField(id) { const el = $(id); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } }
+  function anyPlannedMeal() {
+    const keys = Object.keys(state.plan || {});
+    for (let i = 0; i < keys.length; i++) { const d = state.plan[keys[i]]; if (d && (d.breakfast || d.lunch || d.dinner)) return true; }
+    return false;
+  }
+  const GUIDE_MOMENTS = {
+    groceries: { pose: "mina-point-show.svg", line: "guide.moment.groceries", btn: "guide.moment.groceriesBtn", ready: function () { return state.pantry.length === 0; }, act: function () { focusField("gName"); } },
+    photocal: { pose: "mina-point-show.svg", line: "guide.moment.photocal", btn: "guide.moment.photocalBtn", ready: function () { return true; }, act: function () { const b = $("calPhotoBtn"); if (b) b.click(); } },
+    family: { pose: "mina-point-show.svg", line: "guide.moment.family", btn: "guide.moment.familyBtn", ready: function () { return state.family.length <= 1; }, act: function () { focusField("fName"); } },
+    reminders: { pose: "mina-point-show.svg", line: "guide.moment.reminders", btn: "guide.moment.remindersBtn", ready: function () { return state.notifications !== "granted"; }, act: function () { const b = $("notifOn"); if (b) b.click(); } },
+    recipes: { pose: "mina-point-show.svg", line: "guide.moment.recipes", btn: "guide.moment.recipesBtn", ready: function () { return state.customRecipes.length === 0; }, act: function () { focusField("ownName"); } }
+  };
+  function maybeGuideMoment(v) {
+    if (v === "calendar") { renderGuideHello(); return; }
+    const slot = $("guideMoment-" + v);
+    if (!slot) return;
+    if (guideTourOpen() || (state.guideSeen && state.guideSeen[v])) { slot.innerHTML = ""; return; }
+    if (v === "list") {
+      const planned = anyPlannedMeal();
+      slot.innerHTML = guideMomentCard(planned ? "mina-celebrate.svg" : "mina-point-show.svg", planned ? "guide.moment.listBuilt" : "guide.moment.list", null);
+      bindGuideMoment(slot, "list", null);
+      return;
+    }
+    const M = GUIDE_MOMENTS[v];
+    if (!M || !M.ready()) { slot.innerHTML = ""; return; }
+    slot.innerHTML = guideMomentCard(M.pose, M.line, M.btn);
+    bindGuideMoment(slot, v, M.act);
+  }
+  /* The calendar's hello slot: this build's what's-changed card
+     (once, only for a user who already has data), else the return
+     greeting after two or more days away (once per return, and
+     never for a user still in the tour). Device-local flags: a
+     greeting is about this device's returns, not account data. */
+  let guideHelloBooted = false;
+  function renderGuideHello() {
+    const slot = $("guideHello");
+    if (!slot) return;
+    if (guideTourOpen()) { slot.innerHTML = ""; return; }
+    let whatsNewSeen = true, lastVisit = "", greetDay = "";
+    try {
+      whatsNewSeen = !!localStorage.getItem("mpWhatsNew33");
+      lastVisit = localStorage.getItem("mpLastVisitDay") || "";
+      greetDay = localStorage.getItem("mpGreetDay") || "";
+    } catch (e) { /* no store: no hello, no harm */ }
+    const today = todayKey();
+    if (!whatsNewSeen && L.stateHasUserData(state)) {
+      slot.innerHTML = "<div class='card guideMoment'><img class='guideMomentPose' src='mina-welcome.svg' alt='" + esc(t("tour.minaAlt")) + "'><div class='guideMomentBody'><strong>" + esc(t("guide.newTitle")) + "</strong><p>" + esc(t("guide.newLine")) + "</p><div class='row'><button class='pillBtn' data-hello-ok='1'>" + esc(t("guide.gotIt")) + "</button></div></div></div>";
+      const ok = slot.querySelector("[data-hello-ok]");
+      if (ok) ok.addEventListener("click", function () { try { localStorage.setItem("mpWhatsNew33", "1"); } catch (e) {} slot.innerHTML = ""; });
+    } else {
+      const gs = state.guideState && state.guideState.status;
+      let gap = 0;
+      if (lastVisit && lastVisit !== today) { try { gap = Math.round((L.parseKey(today) - L.parseKey(lastVisit)) / 86400000); } catch (e) { gap = 0; } }
+      if ((gs === "done" || gs === "skipped") && gap >= 2 && greetDay !== today) {
+        const planned = (state.plan[today] && (state.plan[today].breakfast || state.plan[today].lunch || state.plan[today].dinner));
+        slot.innerHTML = "<div class='card guideMoment'><img class='guideMomentPose' src='mina-welcome.svg' alt='" + esc(t("tour.minaAlt")) + "'><div class='guideMomentBody'><p>" + esc(t("guide.back")) + (planned ? "" : " " + esc(t("guide.backNoPlan"))) + "</p><div class='row'>" +
+          (planned ? "" : "<button class='primaryBtn' data-hello-plan='1'>" + esc(t("cal.planFirstWeek")) + "</button>") +
+          "<button class='pillBtn' data-hello-ok='1'>" + esc(t("guide.gotIt")) + "</button></div></div></div>";
+        const ok2 = slot.querySelector("[data-hello-ok]");
+        if (ok2) ok2.addEventListener("click", function () { try { localStorage.setItem("mpGreetDay", today); } catch (e) {} slot.innerHTML = ""; });
+        const pb = slot.querySelector("[data-hello-plan]");
+        if (pb) pb.addEventListener("click", function () { try { localStorage.setItem("mpGreetDay", today); } catch (e) {} slot.innerHTML = ""; planMyFirstWeek(); renderCalendar(); renderSide(); toast(t("cal.firstWeekPlanned")); });
+      } else slot.innerHTML = "";
+    }
+    if (!guideHelloBooted) { guideHelloBooted = true; try { localStorage.setItem("mpLastVisitDay", today); } catch (e) {} }
+  }
+  /* The checklist: seven real actions, ticked by doing (logic.js
+     guideChecklist is the one reader), each open row a road to its
+     view. All seven done earns the celebrate pose, rationed to
+     this one earned moment. */
+  function renderGuideChecklist() {
+    const box = $("guideChecklist");
+    if (!box) return;
+    const rows = L.guideChecklist(state);
+    const labels = { table: "guide.check.table", styles: "guide.check.styles", plan: "guide.check.plan", list: "guide.check.list", fridge: "guide.check.fridge", person: "guide.check.person", reminders: "guide.check.reminders" };
+    const go = { table: "family", styles: "prefs", plan: "calendar", list: "list", fridge: "groceries", person: "family", reminders: "reminders" };
+    const allDone = rows.every(function (r) { return r.done; });
+    box.innerHTML = "<h3 class='guideCheckTitle'>" + esc(t("guide.checkTitle")) + "</h3>" + rows.map(function (r) {
+      return r.done
+        ? "<div class='checkRow done'><span class='checkTick'>✓</span><span>" + esc(t(labels[r.id])) + "</span></div>"
+        : "<button class='checkRow todo' data-check-go='" + r.id + "'><span class='checkBox'></span><span>" + esc(t(labels[r.id])) + "</span></button>";
+    }).join("") + (allDone ? "<div class='guideMoment guideCheckDone'><img class='guideMomentPose' src='mina-celebrate.svg' alt='" + esc(t("tour.minaAlt")) + "'><p>" + esc(t("guide.checkDone")) + "</p></div>" : "");
+    box.querySelectorAll("[data-check-go]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const id = b.getAttribute("data-check-go");
+        if (id === "styles") { const c = $("cuisineChips"); if (c) c.scrollIntoView({ block: "center" }); return; }
+        switchView(go[id]);
+      });
+    });
+  }
   /* The tour's handles for the accounts layer. A sign in can land
      while the tour is already open (the app loads before the session
      resolves), which can change what stop 1 shows, so the accounts
@@ -2462,8 +2732,15 @@
          rewind the stop is lost for the whole run and only
          the weaker pop ever asks. A stop that drew and was
          sailed past (tourNameStopDrawn) is never re-armed
-         here: the re-offer discipline owns that road. */
-      if (guideStep > 1 && tourStep1WelcomeDrawn && !tourNameStopDrawn && tourNameVariant()) {
+         here: the re-offer discipline owns that road. The
+         arm also reads the account's own witness
+         (guideState.stopDrawn): a landing's reload ends the
+         page life and with it this life's flags, so a walk
+         resumed past step 1 whose stop never drew in ANY
+         life is still rewound here, and one whose stop drew
+         in an earlier life is still left to the re-offer
+         discipline (QA b33r drive 4 reconciliation). */
+      if (guideStep > 1 && (tourStep1WelcomeDrawn || !(state.guideState && state.guideState.stopDrawn)) && !tourNameStopDrawn && tourNameVariant()) {
         guideSetStep(1);
         /* The accounts layer chooses between this stop and its
            quieter re-ask immediately after refresh. Make the rewound
@@ -2525,7 +2802,32 @@
        lives on in this page. */
     adoptLandedState: function (st) {
       if (!st || typeof st !== "object") return;
-      state = normaliseState(JSON.parse(JSON.stringify(st)));
+      var next = normaliseState(JSON.parse(JSON.stringify(st)));
+      /* The guide's progress is this session's own truth (QA
+         b33r, drive 4): a landing whose pulled copy carries an
+         OLDER guide state — the create-time "notStarted, step 1"
+         is the standing shape, the tour's own step pushes still
+         lagging on the channel — must not rewind a tour this
+         session has begun, nor graduate it: the repair above
+         promotes a pulled notStarted on a data-holding account
+         to done, so the adopted copy marked a dot-4 tour
+         finished, the reopen never resumed it, and the manual
+         road opened at dot 1 by the done rule. The session's
+         own answers outrank the pulled copy the same way the
+         tour's saves outrank the accounts layer's writes (the
+         name war's ruling, at bumpNameAsks): a begun guide
+         keeps its furthest step, and a guide the user finished
+         or skipped here is not resurrected by an older pull.
+         A pulled copy that is AHEAD still imports whole — a
+         second device's progress is real news. */
+      var cur = state && state.guideState, inc = next.guideState;
+      if (cur && inc && cur.status !== inc.status) {
+        if ((cur.status === "done" || cur.status === "skipped") && (inc.status === "inProgress" || inc.status === "notStarted")) next.guideState = cur;
+        else if (cur.status === "inProgress" && (inc.status === "notStarted" || inc.status === "done")) next.guideState = cur;
+      } else if (cur && inc && cur.status === "inProgress" && inc.status === "inProgress" && (inc.step || 1) < (cur.step || 1)) {
+        next.guideState = cur;
+      }
+      state = next;
       save();
       render();
     }
@@ -2667,11 +2969,15 @@
     renderNav();
     render();
     checkReminders();
-    /* The guide opens uninvited only on a genuine first run (guideState
-       notStarted). A guide the user began and left, or closed early, stays
-       closed until the Preferences Setup guide row opens it again at the
-       saved step. It never blocks the app behind it. */
-    if (state.guideState && state.guideState.status === "notStarted") openGuide(state.guideState.step);
+    /* The guide opens uninvited on a genuine first run (guideState
+       notStarted) and RESUMES uninvited when a begun guide was cut
+       short — an app kill mid-tour is an interruption, not an answer
+       (QA b33, B13: the plan's word is that the guide is resumable,
+       and the saved step is kept for exactly this). A guide the user
+       skipped or finished never reopens itself; the Preferences
+       Setup guide row still replays it by hand. It never blocks the
+       app behind it. */
+    if (state.guideState && (state.guideState.status === "notStarted" || state.guideState.status === "inProgress")) openGuide(state.guideState.step);
     if ("serviceWorker" in navigator) { navigator.serviceWorker.register("service-worker.js").catch(function () {}); }
   })();
 })();
